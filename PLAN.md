@@ -421,10 +421,10 @@ Exit criterion: anyone cloning the repo follows `Makefile` targets →
 - [ ] Integration tests against real server
 
 ### M5: Documentation + Examples (Week 5)
-- [ ] README with quickstart
-- [ ] Example scripts: batch edits, variant generation
-- [ ] Agent-onboarding guide (how to feed conventions to a small model)
-- [ ] Model recommendations (embedded vs. Ollama)
+- [x] README with quickstart
+- [x] Example scripts: batch edits, variant generation
+- [x] Agent-onboarding guide (how to feed conventions to a small model)
+- [x] Model recommendations (embedded vs. Ollama)
 
 ---
 
