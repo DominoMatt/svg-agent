@@ -405,7 +405,7 @@ Exit criterion: anyone cloning the repo follows `Makefile` targets →
 - [x] `WorkflowController` read-think-write loop
 - [x] Convention/authoring fetch + cache
 - [x] Direct-edit vs. propose decision logic
-- [ ] CLI: `svg-agent propose`, `svg-agent commit`, `svg-agent rollback`
+- [x] CLI: `svg-agent propose`, `svg-agent commit`, `svg-agent rollback`
 
 ### M3: Pluggable LLM Backend (Week 3)
 - [ ] `LLMBackend` abstract interface

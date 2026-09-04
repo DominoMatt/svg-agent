@@ -124,15 +124,44 @@ def _placeholder(name: str, milestone: str) -> int:
 
 
 def cmd_propose(args: argparse.Namespace) -> int:
-    return _placeholder("propose", "M2 (workflow controller)")
+    """Route an instruction through the workflow controller (variant tray)."""
+    base = args.server or "http://localhost:3000"
+    try:
+        with HTTPClient(base) as api:
+            from svg_agent.workflow import WorkflowController
+
+            verdict = WorkflowController(api).run(args.instruction, args.project)
+    except (httpx.HTTPError, ConnectionError, OSError) as exc:
+        print(f"[svg-agent] propose aborted: {exc}", file=sys.stderr)
+        return RC_ENVIRONMENT
+    print(f"[{verdict.kind.value}] {verdict.summary}")
+    return RC_OK
 
 
 def cmd_commit(args: argparse.Namespace) -> int:
-    return _placeholder("commit", "M2 (workflow controller)")
+    """Freeze the project's current SVG as a labelled version."""
+    base = args.server or "http://localhost:3000"
+    try:
+        with HTTPClient(base) as api:
+            rev = api.commit(args.project, label=args.label)
+    except (httpx.HTTPError, ConnectionError, OSError) as exc:
+        print(f"[svg-agent] commit aborted: {exc}", file=sys.stderr)
+        return RC_ENVIRONMENT
+    print(f"[svg-agent] Committed '{args.project}' as {rev}.")
+    return RC_OK
 
 
 def cmd_rollback(args: argparse.Namespace) -> int:
-    return _placeholder("rollback", "M2 (workflow controller)")
+    """Roll the project back to a previously committed version."""
+    base = args.server or "http://localhost:3000"
+    try:
+        with HTTPClient(base) as api:
+            api.rollback(args.project, args.ref)
+    except (httpx.HTTPError, ConnectionError, OSError) as exc:
+        print(f"[svg-agent] rollback aborted: {exc}", file=sys.stderr)
+        return RC_ENVIRONMENT
+    print(f"[svg-agent] Rolled '{args.project}' back to {args.ref}.")
+    return RC_OK
 
 
 def cmd_undo(args: argparse.Namespace) -> int:
@@ -163,20 +192,23 @@ def build_parser() -> argparse.ArgumentParser:
     p_edit.add_argument("--server", default=None, help="SVG Studio base URL")
     p_edit.set_defaults(func=cmd_edit)
 
-    p_pr = sub.add_parser("propose", help="generate variants (planned M2)")
+    p_pr = sub.add_parser("propose", help="route an instruction through the workflow controller")
     p_pr.add_argument("project")
     p_pr.add_argument("instruction")
     p_pr.add_argument("--count", type=int, default=3)
+    p_pr.add_argument("--server", default=None, help="SVG Studio base URL")
     p_pr.set_defaults(func=cmd_propose)
 
-    p_co = sub.add_parser("commit", help="freeze a version (planned M2)")
+    p_co = sub.add_parser("commit", help="freeze a version")
     p_co.add_argument("project")
     p_co.add_argument("--label", default=None)
+    p_co.add_argument("--server", default=None, help="SVG Studio base URL")
     p_co.set_defaults(func=cmd_commit)
 
-    p_rb = sub.add_parser("rollback", help="restore a version (planned M2)")
+    p_rb = sub.add_parser("rollback", help="restore a version")
     p_rb.add_argument("project")
     p_rb.add_argument("ref")
+    p_rb.add_argument("--server", default=None, help="SVG Studio base URL")
     p_rb.set_defaults(func=cmd_rollback)
 
     p_un = sub.add_parser("undo", help="swap current <-> old-current (planned M2)")
