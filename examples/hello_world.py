@@ -13,14 +13,19 @@ from svg_agent.llm_backend import create_embedded_llm
 
 
 def main() -> None:
-    # Plain user utterance — the model's embedded chat template supplies
-    # the surrounding control tokens (architectural agnosticism).
-    prompt = "Say hi in one short sentence."
+    # Seed the conversation with a system directive for a crisp, terse reply.
+    # Prompt stays a plain user utterance — the model's embedded chat template
+    # wraps both roles in the correct architectural control tokens.
+    system = (
+        "You are a minimalist CLI companion. Reply tersely—one short "
+        "sentence, no preamble, no emoji."
+    )
+    prompt = "Greet me."
 
     print("[svg-agent] Loading model...")
     with create_embedded_llm() as llm:
         print("[svg-agent] Model loaded. Streaming reply:\n")
-        for token in llm.stream(prompt, max_tokens=32):
+        for token in llm.stream(system=system, prompt=prompt, max_tokens=32):
             print(token, end="", flush=True)
     print("\n\n[svg-agent] Done.")
 

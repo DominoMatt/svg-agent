@@ -70,3 +70,16 @@ def test_running_twice_stays_alive():
 def test_missing_model_raises_file_not_found():
     with pytest.raises(FileNotFoundError):
         EmbeddedLLM("/does/not/exist.gguf")
+
+
+@pytest.mark.parametrize(
+    ("system", "expected_roles"),
+    [
+        (None, ["user"]),
+        ("Be terse.", ["system", "user"]),
+    ],
+)
+def test_messages_for_shapes_openai_payload(system, expected_roles):
+    msg = EmbeddedLLM._messages_for("Hi!", system)
+    assert [m["role"] for m in msg] == expected_roles
+    assert msg[-1] == {"role": "user", "content": "Hi!"}

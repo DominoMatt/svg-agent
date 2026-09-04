@@ -9,6 +9,10 @@ from typing import Generator, Optional
 
 from llama_cpp import Llama
 
+# Shared generative defaults — centralized so tuning touches one place.
+_DEFAULT_MAX_TOKENS = 512
+_DEFAULT_TEMPERATURE = 0.1
+
 
 class EmbeddedLLM:
     """
@@ -17,6 +21,15 @@ class EmbeddedLLM:
     Loads a GGUF model into the current process and provides
     streaming completion. Designed for small models (<1B params, q4 quant).
     """
+
+    @staticmethod
+    def _messages_for(prompt: str, system: Optional[str]) -> list[dict[str, str]]:
+        """Build OpenAI-shaped messages, seeding with system when provided."""
+        messages: list[dict[str, str]] = []
+        if system:
+            messages.append({"role": "system", "content": system})
+        messages.append({"role": "user", "content": prompt})
+        return messages
 
     def __init__(
         self,
@@ -53,24 +66,27 @@ class EmbeddedLLM:
         self,
         prompt: str,
         *,
-        max_tokens: int = 640,
-        temperature: float = 0.1,
+        system: Optional[str] = None,
+        max_tokens: int = _DEFAULT_MAX_TOKENS,
+        temperature: float = _DEFAULT_TEMPERATURE,
         stop: Optional[list[str]] = None,
     ) -> str:
         """
-        Generate a completion (non-streaming).
+        Generates a completion (non-streaming).
 
         Delegates to ``create_chat_completion`` so the model's own embedded
         chat template controls formatting (robust across architectures).
-        ``prompt`` is treated as the user utterance.
+        ``prompt`` is treated as the user utterance; ``system`` seeds the
+        conversation with grounding instructions when provided.
 
         Returns the full generated text.
         """
+        messages = self._messages_for(prompt, system)
         kwargs = {}
         if stop is not None:
             kwargs["stop"] = stop
         out = self._llm.create_chat_completion(
-            messages=[{"role": "user", "content": prompt}],
+            messages=messages,
             max_tokens=max_tokens,
             temperature=temperature,
             stream=False,
@@ -82,8 +98,9 @@ class EmbeddedLLM:
         self,
         prompt: str,
         *,
-        max_tokens: int = 512,
-        temperature: float = 0.1,
+        system: Optional[str] = None,
+        max_tokens: int = _DEFAULT_MAX_TOKENS,
+        temperature: float = _DEFAULT_TEMPERATURE,
         stop: Optional[list[str]] = None,
     ) -> Generator[str, None, None]:
         """
@@ -91,15 +108,17 @@ class EmbeddedLLM:
 
         Like ``complete``, delegates to ``create_chat_completion`` so the
         model's own embedded chat template governs formatting. ``prompt`` is
-        treated as the user utterance.
+        treated as the user utterance; ``system`` seeds the conversation when
+        provided.
 
         Yields each token as it's generated.
         """
+        messages = self._messages_for(prompt, system)
         kwargs = {}
         if stop is not None:
             kwargs["stop"] = stop
         for chunk in self._llm.create_chat_completion(
-            messages=[{"role": "user", "content": prompt}],
+            messages=messages,
             max_tokens=max_tokens,
             temperature=temperature,
             stream=True,
