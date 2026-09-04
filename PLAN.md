@@ -369,33 +369,28 @@ Smallest vertical slice proving we can embed and drive a real LLM in-process.
 Deliverable: `examples/hello_world.py` —
 ```python
 """Load a small GGUF model in-process, greet, stream a reply."""
-import sys
-sys.path.insert(0, "../src")
+from svg_agent.llm_backend import create_embedded_llm
 
-from svg_agent.llm_backend import EmbeddedLLM
+SYSTEM = "Reply tersely\u2014one short sentence, no preamble, no emoji."
 
-MODEL_PATH = "models/MiniCPM5-1B-Q4_K_M.gguf"
-
-with EmbeddedLLM(MODEL_PATH, n_ctx=2048) as llm:
-    for tok in llm.stream(
-        "[INST] Say hi in one short sentence.[/INST]", max_tokens=32
-    ):
+with create_embedded_llm() as llm:                      # honours SVG_MODEL_PATH
+    for tok in llm.stream(system=SYSTEM, prompt="Greet me.", max_tokens=192):
         print(tok, end="", flush=True)
 print("\n[done]")
 ```
 
 Acceptance checklist:
-- [x] Download a ≤500MB instruct GGUF into `models/` (gitignored)
-- [x] `pip install llama-cpp-python` succeeds on this box (CPU wheel ok)
+- [x] Download an instruct GGUF into `models/` (gitignored) — `MiniCPM5-1B-Q4_K_M.gguf`, measured 656&nbsp;MB
+- [x] `pip install llama-cpp-python` succeeds on this box (CPU wheel ok) — v0.3.35
 - [x] Script loads the model **inside our process** (no external server)
 - [x] Streams ≥1 coherent reply to stdout
 - [x] Clean shutdown (process exits promptly, releases VRAM/RSS)
 - [x] Runs deterministically-ish twice without crashing
 
 Also lands groundwork consumed everywhere later:
-- [ ] Skeleton `src/svg_agent/{__init__,cli}.py` + `pyproject.toml`
-- [ ] Minimal smoke unit test `tests/test_llm_backend.py::test_load_greet_stream`
-- [ ] `.env.example` documenting `SVG_MODEL_PATH` override
+- [x] Skeleton `src/svg_agent/{__init__,cli}.py` + `pyproject.toml` (+ `svg-agent` console script)
+- [x] Smoke unit tests in `tests/test_llm_backend.py` (green incl. real-model cases: `test_complete_produces_non_empty_response`, `test_stream_yields_token_chunks`, `test_running_twice_stays_alive`)
+- [x] `.env.example` documenting `SVG_MODEL_PATH` override
 
 Exit criterion: anyone cloning the repo follows `Makefile` targets →
 `make download-model && python examples/hello_world.py` sees a greeting.

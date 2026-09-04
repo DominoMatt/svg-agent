@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import os
+from collections.abc import Generator
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Generator, Optional
 
 from llama_cpp import Llama
 
@@ -23,7 +23,7 @@ class EmbeddedLLM:
     """
 
     @staticmethod
-    def _messages_for(prompt: str, system: Optional[str]) -> list[dict[str, str]]:
+    def _messages_for(prompt: str, system: str | None) -> list[dict[str, str]]:
         """Build OpenAI-shaped messages, seeding with system when provided."""
         messages: list[dict[str, str]] = []
         if system:
@@ -66,10 +66,10 @@ class EmbeddedLLM:
         self,
         prompt: str,
         *,
-        system: Optional[str] = None,
+        system: str | None = None,
         max_tokens: int = _DEFAULT_MAX_TOKENS,
         temperature: float = _DEFAULT_TEMPERATURE,
-        stop: Optional[list[str]] = None,
+        stop: list[str] | None = None,
     ) -> str:
         """
         Generates a completion (non-streaming).
@@ -98,10 +98,10 @@ class EmbeddedLLM:
         self,
         prompt: str,
         *,
-        system: Optional[str] = None,
+        system: str | None = None,
         max_tokens: int = _DEFAULT_MAX_TOKENS,
         temperature: float = _DEFAULT_TEMPERATURE,
-        stop: Optional[list[str]] = None,
+        stop: list[str] | None = None,
     ) -> Generator[str, None, None]:
         """
         Stream a completion token-by-token.
@@ -129,7 +129,7 @@ class EmbeddedLLM:
             if token:
                 yield token
 
-    def __enter__(self) -> EmbeddedLLM:
+    def __enter__(self) -> EmbeddedLLM:  # noqa: PYI034 - truthfully returns self
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb) -> None:
@@ -140,7 +140,7 @@ class EmbeddedLLM:
 
 @contextmanager
 def create_embedded_llm(
-    model_path: Optional[str | Path] = None,
+    model_path: str | Path | None = None,
     **kwargs,
 ) -> Generator[EmbeddedLLM, None, None]:
     """

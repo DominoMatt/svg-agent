@@ -9,6 +9,9 @@ dependencies = [
     "python-dotenv>=1.0.0",
 ]
 
+[project.scripts]
+svg-agent = "svg_agent.cli:main"
+
 [project.optional-dependencies]
 dev = [
     "pytest",

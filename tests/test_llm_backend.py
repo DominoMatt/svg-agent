@@ -49,10 +49,8 @@ def test_complete_produces_non_empty_response():
 
 @needs_model
 def test_stream_yields_token_chunks():
-    collected = []
     with create_embedded_llm(n_ctx=896) as llm:
-        for token in llm.stream(_greeting(), max_tokens=160):
-            collected.append(token)
+        collected = list(llm.stream(_greeting(), max_tokens=160))
     joined = "".join(collected).strip()
     assert len(collected) > 0
     assert len(joined) > 0
