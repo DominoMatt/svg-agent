@@ -1,157 +1,110 @@
 # Agent Onboarding Guide
 
-This guide explains how `svg-agent` feeds conventions to a small (<4B parameter)
-language model so it can produce SVG edits that the server will accept.
+This guide explains how `llm-agent` works and how to extend it.
 
 ---
 
-## The Problem
+## Architecture Overview
 
-Small models are good at structured text but bad at "making things up" — they
-need explicit guardrails. SVG Studio already has guardrails in the form of two
-markdown documents served over HTTP:
+```
+Browser UI (public/) → Node proxy (server/index.mjs) → Ollama (:11434)
+                                                        SVG Studio (:3000) [future]
+```
 
-| Document | Endpoint | Purpose |
-|----------|----------|---------|
-| `BROWSER_AGENTS.md` | `GET /api/conventions` | Workflow rules — what agents may/may not do |
-| `AUTHORING.md` | `GET /api/authoring` | SVG structure guide — naming, nesting, void elements |
-
-When a human works in the browser, these are visible as side-panels. When the
-agent works, they are injected into the LLM prompt as **system context**.
+The project has **zero npm dependencies** — it uses only Node ≥ 18 built-ins.
 
 ---
 
-## Convention Injection Pipeline
+## Key Concepts
 
-```
-Agent starts
-    │
-    ▼
-GET /api/conventions  ──→  ConventionStore.conventions()
-GET /api/authoring    ──→  ConventionStore.authoring()
-    │
-    ▼  (fetched once, memoised for the session)
-    │
-WorkflowController.ensure_context()
-    │
-    ▼
-classify(instruction)
-    │
-    ├─ OBVIOUS ──────→ MarkupEngine (string ops, no LLM)
-    │
-    └─ SUBJECTIVE ──→ LLM prompt:
-                        [system] conventions + authoring
-                        [user]   current SVG + instruction
-                        → model produces revised SVG
-                        → server validates on PUT
-```
+### Adapter Pattern
 
-### What the LLM sees
+The UI talks to different backends through a **swappable adapter registry**
+defined in `public/js/adapter.js`. Each adapter exposes three methods:
 
-A typical prompt to a small model looks like this:
+| Method | Purpose |
+|---|---|
+| `health(base, model)` | Check if the backend is reachable |
+| `models(base)` | List available model names |
+| `chat(base, opts, onToken)` | Stream a chat completion |
 
-```
-SYSTEM:
-You are an SVG editing assistant. Follow these conventions strictly:
+Currently two adapters are registered:
 
-## Conventions
-[BROWSER_AGENTS.md contents — fetched from the server]
+- **ollama** — fully working, streams NDJSON from `/api/chat`
+- **studio** — placeholder for future SVG Studio integration on `:3000`
 
-## Authoring Guide
-[AUTHORING.md contents — fetched from the server]
+### Reverse Proxy
 
-USER:
-Here is the current SVG for project "fish":
+The Node server (`server/index.mjs`) serves static files from `public/` and
+reverse-proxies `/api/*` requests to the appropriate backend:
 
-<svg viewBox="0 0 100 100">
-  <g id="body" fill="orange" stroke="black" stroke-width="1">
-    <ellipse id="eye" cx="60" cy="40" rx="8" ry="10" fill="white"/>
-    <path id="mouth" d="M 55 55 Q 65 65 55 70" fill="none" stroke="black"/>
-  </g>
-</svg>
+- `/api/ollama/*` → Ollama at `OLLAMA_BASE` (default `:11434`)
+- `/api/studio/*` → Studio at `STUDIO_BASE` (default `:3000`)
+- `/api/*` (fallback) → Ollama
 
-Instruction: make the fish look friendlier
-
-Produce the revised SVG. Output ONLY the <svg> element — no commentary.
-```
-
-### Why this works with small models
-
-1. **Short, structured output** — the model only needs to reproduce the SVG with
-   minor attribute changes. No long-form prose.
-2. **Grounded in conventions** — the system prompt tells the model exactly which
-   attributes are valid, how elements should be nested, and what the naming
-   scheme is.
-3. **Validated on write** — even if the model produces imperfect markup, the
-   server rejects malformed SVG on `PUT /current`, so the agent never silently
-   corrupts the artwork.
+This avoids CORS issues — the browser only talks to one origin.
 
 ---
 
-## For Agent Developers
+## Adding a New Adapter
 
-If you are building a new agent that talks to SVG Studio, here is the minimal
-integration recipe:
+1. **Register in `public/js/adapter.js`:**
 
-### 1. Fetch conventions at startup
-
-```python
-import httpx
-
-base = "http://localhost:3000"
-conventions = httpx.get(f"{base}/api/conventions").text
-authoring = httpx.get(f"{base}/api/authoring").text
+```js
+Adapters.register("my-backend", {
+  name: "My Backend",
+  async health(base, model) { /* ... */ },
+  async models(base) { /* ... */ },
+  async chat(base, { model, messages, temp, maxTokens }, onToken) { /* ... */ },
+});
 ```
 
-### 2. Build your prompt
+2. **Add a proxy route in `server/index.mjs`:**
 
-Combine the conventions + authoring + current SVG + user instruction into a
-single prompt. Keep it under 2 000 tokens for small models.
-
-### 3. Parse the instruction
-
-Use the LLM (or a regex heuristic) to classify the instruction:
-
-- **OBVIOUS** — measurable, deterministic → apply directly via `PUT /current`
-- **SUBJECTIVE** — qualitative, creative → propose variants via `POST /options`
-- **STRUCTURAL** — adds/removes elements → propose variants
-
-### 4. Apply or propose
-
-```python
-if is_obvious(instruction):
-    # Direct edit — no LLM needed
-    new_svg = apply_edits(current_svg, instruction)
-    httpx.put(f"{base}/api/projects/{project}/current", json={"svg": new_svg})
-else:
-    # Propose variants
-    variants = [{"label": f"variant-{i}", "svg": current_svg} for i in range(3)]
-    httpx.post(f"{base}/api/projects/{project}/options", json={"options": variants})
+```js
+if (req.url.startsWith("/api/my-backend/")) {
+  req.url = req.url.replace("/api/my-backend", "");
+  return proxy(MY_BACKEND_BASE, req, res);
+}
 ```
 
-### 5. Verify
-
-Re-read the current state and compare. The server is the source of truth —
-never trust your local copy after a write.
+3. **Update `refreshEndpoint()` in `public/js/app.js`** to set the default
+   endpoint for your adapter.
 
 ---
 
-## Tips for Small Models
+## Configuration
 
-| Tip | Why |
-|-----|-----|
-| Keep the SVG under 100 lines | Small models lose coherence past ~500 tokens |
-| Use `id` on every element | Makes element targeting unambiguous |
-| Include the viewBox | The model needs spatial context to reason about transforms |
-| One edit per instruction | Fewer chances for hallucinated side-effects |
-| Validate on write | Never assume the model's output is correct |
+All settings are via environment variables (copy `.env.example` to `.env`):
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `PORT` | `5173` | Server port |
+| `OLLAMA_BASE` | `http://127.0.0.1:11434` | Ollama URL |
+| `STUDIO_BASE` | `http://127.0.0.1:3000` | SVG Studio URL (future) |
 
 ---
 
-## Model Selection Guide
+## Running Locally
 
-| Model | Size | RAM | Quality | Notes |
-|-------|------|-----|---------|-------|
-| `MiniCPM5-1B-Q4_K_M` | ~450 MB | <1 GB | Good for attribute edits | Default; used in hello_world.py |
-| `qwen2.5-coder:3b` (Ollama) | ~2 GB | ~3 GB | Better at structural edits | Needs Ollama daemon |
-| `llama3.2:3b` (Ollama) | ~2 GB | ~3 GB | Strong general reasoning | Good fallback |
+```bash
+# 1. Ensure Ollama is running with at least one model
+ollama pull qwen2.5-coder:3b
+
+# 2. Start the playground
+node server/index.mjs
+
+# 3. Open http://localhost:5173
+```
+
+---
+
+## Project Files
+
+| File | Purpose |
+|---|---|
+| `server/index.mjs` | Node.js server + reverse proxy |
+| `public/index.html` | Playground page |
+| `public/css/style.css` | Dark theme styles |
+| `public/js/adapter.js` | Swappable connector registry |
+| `public/js/app.js` | UI wiring, streaming, presets |

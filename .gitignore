@@ -1,29 +1,31 @@
 # Model files (large, not committed)
-models/
+models/*
+!.gitkeep
 *.gguf
 
-# Python
-__pycache__/
-*.py[cod]
-*$py.class
-.pytest_cache/
-.ruff_cache/
-.coverage
-htmlcov/
-*.egg-info/
+# Runtime / build
+node_modules/
 dist/
-build/
+tmp/
 
-# Environment
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# Env
 .env
-.env.local
+.env.*
+!.env.example
 
-# IDE
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor / OS
 .vscode/
 .idea/
 *.swp
 *.swo
-
-# OS
 .DS_Store
 Thumbs.db

@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>llm-agent · Local Playground</title>
+<link rel="stylesheet" href="./css/style.css" />
+</head>
+<body>
+<div class="layout">
+
+  <!-- ══ Sidebar ═══════════════════════════════ -->
+  <aside class="sidebar">
+    <div class="brand">
+      <span class="logo">◉</span>
+      <span><strong>llm&#8209;agent</strong></span>
+      <button id="reset" class="icon-btn" title="New conversation" aria-label="New conversation">↺</button>
+    </div>
+
+    <nav class="presets">
+      <h3>Presets</h3>
+      <ul id="preset-list"></ul>
+    </nav>
+
+    <footer class="foot">
+      <label class="field">
+        <span>Adapter</span>
+        <select id="adapter"></select>
+      </label>
+      <label class="field">
+        <span>Endpoint</span>
+        <input id="endpoint" spellcheck="false" />
+      </label>
+      <label class="field">
+        <span>Model</span>
+        <input id="model" spellcheck="false" />
+      </label>
+      <div id="status" class="pill neutral">connecting…</div>
+    </footer>
+  </aside>
+
+  <!-- ══ Stage ═════════════════════════════════ -->
+  <main class="stage">
+    <header class="topbar">
+      <h1>Playground</h1>
+      <div class="controls">
+        <label class="ctl">
+          Temp
+          <input id="temp" type="range" min="0" max="1.500" step="0.040" value="0.730" />
+          <output id="tempOut">0.740</output>
+        </label>
+        <label class="ctl">
+          Top-p
+          <input id="topP" type="range" min="0" max="1" step="0.015" value="0.955" />
+          <output id="topPOut">0.958</output>
+        </label>
+        <label class="ctl num">
+          Max tokens
+          <input id="maxTokens" type="number" min="32" max="65536" step="32" value="1536" />
+        </label>
+      </div>
+    </header>
+
+    <ol id="history" class="history"></ol>
+
+    <form id="composer" novalidate>
+      <textarea id="input" rows="1" placeholder="Ask anything…  (↵ sends, ⇧↵ newline)"></textarea>
+      <button id="send" class="fab primary" type="submit" aria-label="Send">➤</button>
+    </form>
+  </main>
+</div>
+
+<noscript><style>.layout>*{visibility:hidden}#noscriptMsg{display:block}</style>
+<p id="noscriptMsg">JavaScript is required to run the playground.</p></noscript>
+
+<script src="./js/adapter.js"></script>
+<script src="./js/app.js"></script>
+</body>
+</html>

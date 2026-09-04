@@ -1,103 +1,109 @@
-# svg-agent
+# llm-agent
 
-A lightweight Python agent that manipulates SVG artwork through the
-[SVG Studio](https://github.com/DominoMatt/svg-studio) HTTP API. It reads
-conventions, composes or edits SVG markup, and pushes changes through the same
-endpoints a browser would use — no file access, no shell, no browser automation.
+A local LLM playground — chat with models via Ollama through a clean web UI. Zero
+build step, zero npm dependencies, just `node` and a browser.
 
 ```
-┌───────────────────────────────────────────────────────────────┐
-│                       svg-agent                               │
-│  ┌────────────┐  ┌──────────────┐  ┌──────────────────────┐  │
-│  │ HTTPClient │  │ Workflow     │  │ Interactive Shell     │  │
-│  │ (httpx)    │  │ Controller   │  │ (REPL + SSE relay)   │  │
-│  └─────┬──────┘  └──────┬───────┘  └──────────┬───────────┘  │
-│        └────────────────┼──────────────────────┘              │
-│                         ▼                                     │
-│              SVG Studio Server (:3000)                        │
-│              REST + SSE                                      │
-└───────────────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────┐
+│                    Browser UI                           │
+│  ┌──────────┐  ┌──────────────────────────────────┐   │
+│  │ Sidebar  │  │ Stage                             │   │
+│  │ Presets  │  │ Streaming chat, temp/tokens ctrl  │   │
+│  │ Adapter  │  │                                    │   │
+│  │ Model    │  │                                    │   │
+│  └──────────┘  └──────────────────────────────────┘   │
+└──────────────────────┬─────────────────────────────────┘
+                       │ /api/*
+                       ▼
+            ┌────────────────────┐
+            │  Node.js proxy    │  server/index.mjs
+            │  (static + proxy) │  :5173
+            └────────┬──────────┘
+                     │
+                     ▼
+            ┌────────────────────┐
+            │  Ollama            │  :11434
+            │  (local models)   │
+            └────────────────────┘
 ```
 
-**Key features:**
-
-- **Deterministic edits** — measurable instructions ("stroke-width 2", "move eye
-  up 5") are applied directly via `PUT /current`, with a diff preview + confirmation
-  in the interactive shell.
-- **Variant proposals** — subjective instructions ("friendlier", "warmer") generate
-  a palette of options for the operator to pick from in the browser.
-- **Interactive shell** — a REPL with coloured output, `readline` history, SSE event
-  relay, and metacommands for project switching and canvas inspection.
-- **Version control** — commit, rollback, and undo through the server's version API.
-- **Embedded LLM** (optional) — an in-process GGUF model via `llama-cpp-python` for
-  prompt-to-instruction parsing; pure-stdlib fallback when no model is present.
-
----
+**Zero dependencies** — the server uses only Node ≥ 18 built-ins (`http`, `fs`,
+`fetch`). The frontend is plain HTML/CSS/JS with no bundler.
 
 ## Quick Start
 
-### 1. Clone & install
+### 1. Install Ollama
+
+Follow [ollama.ai](https://ollama.ai) for your platform, then pull a model:
 
 ```bash
-git clone https://github.com/DominoMatt/svg-agent.git
-cd svg-agent
-pip install -e ".[dev]"        # runtime + test deps
+ollama pull qwen2.5-coder:3b   # or any model you prefer
 ```
 
-### 2. Download the model (optional — for embedded LLM features)
+### 2. Start the playground
 
 ```bash
-make download-model            # ~450 MB into models/
+node server/index.mjs
 ```
 
-### 3. Verify — Hello World
+Open **http://localhost:5173** in your browser.
 
-```bash
-python examples/hello_world.py
+### 3. Chat
+
+Pick a preset from the sidebar, type a message, and hit Enter. The response
+streams in real-time.
+
+## Configuration
+
+All settings are via environment variables (see `.env.example`):
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `PORT` | `5173` | Playground server port |
+| `OLLAMA_BASE` | `http://127.0.0.1:11434` | Ollama server URL |
+| `STUDIO_BASE` | `http://127.0.0.1:3000` | Future: SVG Studio connector |
+
+## Architecture
+
+The project uses an **adapter pattern** — the UI can talk to different backends
+by swapping the active adapter:
+
+| Adapter | Status | Backend |
+|---|---|---|
+| **Ollama** | ✅ Working | `/api/ollama/*` → Ollama at `:11434` |
+| **SVG Studio** | 🔲 Placeholder | `/api/studio/*` → Studio at `:3000` (future) |
+
+Adding a new backend is ~30 lines: implement `health()`, `models()`, and `chat()`
+in `public/js/adapter.js`, register it, and add a proxy route in `server/index.mjs`.
+
+## Project Structure
+
+```
+llm-agent/
+├── server/
+│   └── index.mjs          # Node.js static server + reverse proxy
+├── public/
+│   ├── index.html          # Playground page
+│   ├── css/style.css       # Dark theme styles
+│   └── js/
+│       ├── adapter.js      # Swappable LLM connector registry
+│       └── app.js          # UI wiring, streaming, presets
+├── models/                 # Local model files (gitignored)
+├── .env.example            # Configuration template
+└── README.md
 ```
 
-You should see a streamed greeting from the in-process model, then a clean exit.
+## Presets
 
-### 4. Connect to SVG Studio
+The sidebar ships with five built-in presets:
 
-Start [SVG Studio](https://github.com/DominoMatt/svg-studio) on its default port
-(:3000), then try a one-shot edit:
+- **General** — helpful assistant, concise
+- **SVG Generator** — outputs raw SVG in code blocks
+- **Code Reviewer** — structured code analysis
+- **Translator** — pure translation output
+- **JSON Builder** — valid JSON only
 
-```bash
-svg-agent edit fish SET:eye.fill=blue --server http://localhost:3000
-```
-
-Or jump into the interactive shell:
-
-```bash
-svg-agent shell fish --server http://localhost:3000
-```
-
----
-
-## CLI Reference
-
-All verbs accept `--server BASE_URL` (default `http://localhost:3000`).
-
-| Verb | Usage | What it does |
-|------|-------|-------------|
-| `chat` | `svg-agent chat "Greet me."` | Stream a reply from the embedded model |
-| `edit` | `svg-agent edit fish SET:eye.fill=red` | Apply structural edits (SET/DROP/TX/BEFORE/AFTER) |
-| `propose` | `svg-agent propose fish "warmer colors"` | Route through the workflow controller → option tray |
-| `commit` | `svg-agent commit fish --label v1` | Freeze current SVG as a labelled version |
-| `rollback` | `svg-agent rollback fish v003-label` | Restore a previous version |
-| `undo` | `svg-agent undo fish` | Swap current ↔ previous state |
-| `shell` | `svg-agent shell fish` | Enter the interactive REPL |
-
-### Structural edit operands (`edit`)
-
-| Operand | Example | Effect |
-|---------|---------|--------|
-| `SET:elem.attr=value` | `SET:eye.fill=blue` | Set an attribute |
-| `DROP:elem.attr` | `DROP:body.stroke` | Remove an attribute |
-| `TX:elem.TRANSFORM` | `TX:eye.translate(0,-5)` | Prepend to transform |
-| `BEFORE:elem.<MARKUP>` | `BEFORE:eye.<circle …/>` | Insert sibling before |
-| `AFTER:elem.<MARKUP>` | `AFTER:eye.<circle …/>` | Insert sibling after |
+Customise the `PRESETS` array in `public/js/app.js` to add your own.
 
 ---
 
@@ -160,9 +166,9 @@ edit operands), two backends are available:
 ### Embedded (`llama-cpp-python`)
 
 - **Pros:** No external process; works offline; single-process deployment.
-- **Cons:** ~450 MB model download; slower cold-start; CPU-bound on most hosts.
+- **Cons:** ~688 MB model download; slower cold-start; CPU-bound on most hosts.
 - **Best for:** Codespace/container deployments, air-gapped environments, demos.
-- **Recommended model:** `MiniCPM5-1B-Q4_K_M.gguf` (~450 MB, runs in <1 GB RAM).
+- **Recommended model:** `MiniCPM5-1B-Q4_K_M.gguf` (~688 MB, runs in <1 GB RAM).
 
 ### Ollama (HTTP API)
 
