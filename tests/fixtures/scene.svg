@@ -1,0 +1,17 @@
+<!-- Scene fixture for MarkupEngine unit tests -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 260">
+  <!-- Background water -->
+  <rect id="water" x="0" y="0" width="320" height="190" rx="4" ry="4"/>
+  <!-- Sun disc -->
+  <circle id="sun" cx="270" cy="58" r="34" fill="#ffe08a"/>
+  <!-- Fish body -->
+  <g id="fish-group" transform="translate(60,120)">
+    <ellipse id="body" cx="0" cy="0" rx="66" ry="30" fill="#ef8354"/>
+    <polygon id="fin-top" points="-8,-26 6,-74 26,-30" fill="#cf6840"/>
+    <polygon id="tail" points="58,-2 112,-30 116,34" fill="#bf5838"/>
+    <circle id="eye" cx="34" cy="-8" r="7" fill="#222"/>
+  </g>
+  <!-- Seaweed cluster -->
+  <path id="kelp-left" d="M 210 196 C 214 170 208 146 216 118" stroke="#2f855a" stroke-width="6" fill="none"/>
+  <path id="sand-bar" d="M 280 212 h 640" stroke="#ddbb77" stroke-width="10" stroke-linecap="round"/>
+</svg>

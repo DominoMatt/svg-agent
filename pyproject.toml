@@ -16,6 +16,7 @@ svg-agent = "svg_agent.cli:main"
 dev = [
     "pytest",
     "pytest-asyncio",
+    "httpx",
     "ruff",
 ]
 http = [
