@@ -102,6 +102,11 @@ class WorkflowController:
         self.store = store or ConventionStore(client)
         self.classifier = classifier
 
+    @property
+    def client(self) -> HTTPClient:
+        """Expose the underlying transport for shells and integrations."""
+        return self._client
+
     def resolve_project(self, hinted: str | None) -> str:
         return hinted if hinted else self._client.get_focus()
 

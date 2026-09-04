@@ -415,9 +415,9 @@ Exit criterion: anyone cloning the repo follows `Makefile` targets →
 - [ ] Lazy loading on first subjective instruction
 
 ### M4: Interactive Shell + Polish (Week 4)
-- [ ] REPL mode with history/completion
-- [ ] SSE listener for live updates
-- [ ] Rich output: diff preview before write, colored logs
+- [x] REPL mode with history/completion
+- [x] SSE listener for live updates
+- [x] Rich output: diff preview before write, colored logs
 - [ ] Integration tests against real server
 
 ### M5: Documentation + Examples (Week 5)

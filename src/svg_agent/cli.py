@@ -53,8 +53,6 @@ _CHAT_SYSTEM = (
     "sentence, no preamble, no emoji."
 )
 
-_NOT_YET = "{verb:scheduled for {when}; not implemented yet."
-
 
 def cmd_chat(args: argparse.Namespace) -> int:
     """Stream a reply from the embedded model (functional in M0)."""
@@ -121,11 +119,6 @@ def cmd_edit(args: argparse.Namespace) -> int:
     return RC_OK
 
 
-def _placeholder(name: str, milestone: str) -> int:
-    print(_NOT_YET.format(verb=f"{name:<8}", when=milestone))
-    return RC_ERROR
-
-
 def cmd_propose(args: argparse.Namespace) -> int:
     """Route an instruction through the workflow controller (variant tray)."""
     base = args.server or "http://localhost:3000"
@@ -184,7 +177,18 @@ def cmd_undo(args: argparse.Namespace) -> int:
 
 
 def cmd_shell(args: argparse.Namespace) -> int:
-    return _placeholder("shell", "M4 (interactive REPL)")
+    """Enter the interactive REPL over the workflow controller."""
+    base = args.server or "http://localhost:3000"
+    try:
+        with HTTPClient(base) as api:
+            from svg_agent.shell import Shell
+            from svg_agent.workflow import WorkflowController
+
+            controller = WorkflowController(api)
+            return Shell(controller, project=getattr(args, "project", None)).run()
+    except (httpx.HTTPError, ConnectionError, OSError) as exc:
+        print(f"[svg-agent] shell aborted: {exc}", file=sys.stderr)
+        return RC_ENVIRONMENT
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -231,7 +235,9 @@ def build_parser() -> argparse.ArgumentParser:
     p_un.add_argument("--server", default=None, help="SVG Studio base URL")
     p_un.set_defaults(func=cmd_undo)
 
-    p_sh = sub.add_parser("shell", help="interactive REPL (planned M4)")
+    p_sh = sub.add_parser("shell", help="interactive REPL over the workflow controller")
+    p_sh.add_argument("project", nargs="?", default=None, help="initial project (uses focus if omitted)")
+    p_sh.add_argument("--server", default=None, help="SVG Studio base URL")
     p_sh.set_defaults(func=cmd_shell)
 
     return parser
