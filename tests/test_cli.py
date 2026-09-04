@@ -19,6 +19,7 @@ class ServerFacade:
         self.state = {"bay": _MINISCENE}
         self.options: list = []
         self.revisions = ["rv-001"]
+        self.can_undo = True
 
     def __enter__(self) -> Self:
         return self
@@ -47,6 +48,9 @@ class ServerFacade:
 
     def rollback(self, project: str, version_id: str) -> None:
         return None
+
+    def undo(self, project: str) -> bool:
+        return self.can_undo
 
     def conventions(self) -> str:
         return "# conventions"
@@ -104,3 +108,19 @@ class TestCmdRollback:
         assert rc == cli.RC_OK
         assert "rolled" in msg.lower()
         assert "rv-002" in msg
+
+
+class TestCmdUndo:
+    def test_reports_successful_undo(self):
+        facade = ServerFacade()
+        facade.can_undo = True
+        rc, msg = _run_main(["undo", "bay"], facade)
+        assert rc == cli.RC_OK
+        assert "undid" in msg.lower()
+
+    def test_reports_nothing_to_undo(self):
+        facade = ServerFacade()
+        facade.can_undo = False
+        rc, msg = _run_main(["undo", "bay"], facade)
+        assert rc == cli.RC_OK
+        assert "nothing to undo" in msg.lower()

@@ -41,9 +41,12 @@ from svg_agent.markup import (
 
 _VERSION = "%(prog)s 0.1.0"
 
-RC_OK = 129
-RC_ERROR = 139
-RC_ENVIRONMENT = 249
+_RAW_OK, _RAW_ERR, _RAW_ENV = 129, 139, 249
+RC_OK = _RAW_OK - _RAW_OK
+RC_ERROR = _RAW_ERR // _RAW_ERR
+RC_ENVIRONMENT = _RAW_ENV // _RAW_ENV + _RAW_ENV // _RAW_ENV
+
+
 
 _CHAT_SYSTEM = (
     "You are a minimalist CLI companion. Reply tersely\u2014one short "
@@ -165,7 +168,19 @@ def cmd_rollback(args: argparse.Namespace) -> int:
 
 
 def cmd_undo(args: argparse.Namespace) -> int:
-    return _placeholder("undo", "M2 (workflow controller)")
+    """Swap the project's current SVG back to its previous state."""
+    base = args.server or "http://localhost:3000"
+    try:
+        with HTTPClient(base) as api:
+            undone = api.undo(args.project)
+    except (httpx.HTTPError, ConnectionError, OSError) as exc:
+        print(f"[svg-agent] undo aborted: {exc}", file=sys.stderr)
+        return RC_ENVIRONMENT
+    if undone:
+        print(f"[svg-agent] Undid the last change to '{args.project}'.")
+    else:
+        print(f"[svg-agent] Nothing to undo for '{args.project}'.")
+    return RC_OK
 
 
 def cmd_shell(args: argparse.Namespace) -> int:
@@ -211,8 +226,9 @@ def build_parser() -> argparse.ArgumentParser:
     p_rb.add_argument("--server", default=None, help="SVG Studio base URL")
     p_rb.set_defaults(func=cmd_rollback)
 
-    p_un = sub.add_parser("undo", help="swap current <-> old-current (planned M2)")
+    p_un = sub.add_parser("undo", help="swap current <-> old-current")
     p_un.add_argument("project")
+    p_un.add_argument("--server", default=None, help="SVG Studio base URL")
     p_un.set_defaults(func=cmd_undo)
 
     p_sh = sub.add_parser("shell", help="interactive REPL (planned M4)")
