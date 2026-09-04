@@ -1,9 +1,10 @@
 .PHONY: help install install-dev download-model run-hello test lint clean
 
 # Default model for Phase 0 hello world
-MODEL_URL := https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/qwen2.5-0.5b-instruct-q4_k_m.gguf
+MODEL_REPO := openbmb/MiniCPM5-1B-GGUF
+MODEL_URL := https://huggingface.co/$(MODEL_REPO)/resolve/main/MiniCPM5-1B-Q4_K_M.gguf
 MODEL_DIR := models
-MODEL_FILE := $(MODEL_DIR)/qwen2.5-0.5b-instruct-q4_k_m.gguf
+MODEL_FILE := $(MODEL_DIR)/MiniCPM5-1B-Q4_K_M.gguf
 
 help:
 	@echo "svg-agent — Phase 0: Embed-an-LLM Hello World"

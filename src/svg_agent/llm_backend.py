@@ -53,22 +53,30 @@ class EmbeddedLLM:
         self,
         prompt: str,
         *,
-        max_tokens: int = 512,
+        max_tokens: int = 640,
         temperature: float = 0.1,
         stop: Optional[list[str]] = None,
     ) -> str:
         """
         Generate a completion (non-streaming).
 
+        Delegates to ``create_chat_completion`` so the model's own embedded
+        chat template controls formatting (robust across architectures).
+        ``prompt`` is treated as the user utterance.
+
         Returns the full generated text.
         """
-        out = self._llm(
-            prompt,
+        kwargs = {}
+        if stop is not None:
+            kwargs["stop"] = stop
+        out = self._llm.create_chat_completion(
+            messages=[{"role": "user", "content": prompt}],
             max_tokens=max_tokens,
             temperature=temperature,
-            stop=stop or ["</s>", "<|im_end|>"],
+            stream=False,
+            **kwargs,
         )
-        return out["choices"][0]["text"]
+        return out["choices"][0]["message"]["content"]
 
     def stream(
         self,
@@ -81,16 +89,24 @@ class EmbeddedLLM:
         """
         Stream a completion token-by-token.
 
+        Like ``complete``, delegates to ``create_chat_completion`` so the
+        model's own embedded chat template governs formatting. ``prompt`` is
+        treated as the user utterance.
+
         Yields each token as it's generated.
         """
-        for chunk in self._llm(
-            prompt,
+        kwargs = {}
+        if stop is not None:
+            kwargs["stop"] = stop
+        for chunk in self._llm.create_chat_completion(
+            messages=[{"role": "user", "content": prompt}],
             max_tokens=max_tokens,
             temperature=temperature,
-            stop=stop or ["</s>", "<|im_end|>"],
             stream=True,
+            **kwargs,
         ):
-            token = chunk["choices"][0]["text"]
+            delta = chunk["choices"][0].get("delta", {})
+            token = delta.get("content", "")
             if token:
                 yield token
 
@@ -114,7 +130,7 @@ def create_embedded_llm(
     Reads model path from:
     1. Explicit `model_path` argument
     2. `SVG_MODEL_PATH` environment variable
-    3. Default: `models/qwen2.5-0.5b-instruct-q4_k_m.gguf`
+    3. Default: `models/MiniCPM5-1B-Q4_K_M.gguf`
 
     Usage:
         with create_embedded_llm() as llm:
@@ -124,7 +140,7 @@ def create_embedded_llm(
     if model_path is None:
         model_path = os.getenv(
             "SVG_MODEL_PATH",
-            "models/qwen2.5-0.5b-instruct-q4_k_m.gguf",
+            "models/MiniCPM5-1B-Q4_K_M.gguf",
         )
 
     llm = EmbeddedLLM(model_path, **kwargs)

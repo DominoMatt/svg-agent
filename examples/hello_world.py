@@ -6,15 +6,16 @@ Usage:
     python examples/hello_world.py
 
 Environment:
-    SVG_MODEL_PATH — override model location (default: models/qwen2.5-0.5b-instruct-q4_k_m.gguf)
+    SVG_MODEL_PATH — override model location (default: models/MiniCPM5-1B-Q4_K_M.gguf)
 """
 
 from svg_agent.llm_backend import create_embedded_llm
 
 
 def main() -> None:
-    # Qwen2.5 chat template: <|im_start|>user\n...<|im_end|>\n<|im_start|>assistant\n
-    prompt = "<|im_start|>user\nSay hi in one short sentence.<|im_end|>\n<|im_start|>assistant\n"
+    # Plain user utterance — the model's embedded chat template supplies
+    # the surrounding control tokens (architectural agnosticism).
+    prompt = "Say hi in one short sentence."
 
     print("[svg-agent] Loading model...")
     with create_embedded_llm() as llm:

@@ -292,7 +292,7 @@ Primary (used by Phase 0 hello world):
 
 | File | Size | Source |
 |------|------|--------|
-| `qwen2.5-0.5b-instruct-q4_k_m.gguf` | ~450 MB | HuggingFace `Qwen/Qwen2.5-0.5B-Instruct-GGUF` |
+| `MiniCPM5-1B-Q4_K_M.gguf` | ~780 MB | HuggingFace `openbmb/MiniCPM5-1B-GGUF` |
 
 Later/heavier alternative for richer authoring suggestions:
 
@@ -374,7 +374,7 @@ sys.path.insert(0, "../src")
 
 from svg_agent.llm_backend import EmbeddedLLM
 
-MODEL_PATH = "models/qwen2.5-0.5b-instruct-q4_k_m.gguf"
+MODEL_PATH = "models/MiniCPM5-1B-Q4_K_M.gguf"
 
 with EmbeddedLLM(MODEL_PATH, n_ctx=2048) as llm:
     for tok in llm.stream(
@@ -465,7 +465,7 @@ Then the product goals resume:
 Ordered — finish Gate 0 before expanding sideways:
 
 1. **Repo scaffold** — `git init`, `pyproject.toml` (+ `dev` extra incl. pytest), `Makefile`, `.gitignore` ignoring `models/`
-2. **Download model** — grab `qwen2.5-0.5b-instruct-q4_k_m.gguf` into `models/`
+2. **Download model** — grab `MiniCPM5-1B-Q4_K_M.gguf` into `models/`
 3. **Verify env** — `pip install llama-cpp-python` imports cleanly on this box
 4. **Write `examples/hello_world.py`** — load in-process, stream a greeting (**← Gate 0**)
 5. **Smoke-test** — assert it runs twice without crash; log RSS/time

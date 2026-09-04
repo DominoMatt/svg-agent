@@ -14,15 +14,25 @@ from svg_agent.llm_backend import EmbeddedLLM, create_embedded_llm
 
 PROJECT_ROOT = Path(__file__).parent.parent.resolve()
 
-DEFAULT_MODEL = PROJECT_ROOT / "models" / "qwen2.5-0.5b-instruct-q4_k_m.gguf"
+DEFAULT_MODEL = PROJECT_ROOT / "models" / "MiniCPM5-1B-Q4_K_M.gguf"
+
+
+def _has_a_model() -> bool:
+    env_model = os.environ.get("SVG_MODEL_PATH")
+    if env_model and Path(env_model).is_file():
+        return True
+    return DEFAULT_MODEL.is_file()
+
+
+needs_model = pytest.mark.skipif(
+    not _has_a_model(),
+    reason="GGUF model not present; place it in models/ or set SVG_MODEL_PATH.",
+)
 
 
 def _greeting() -> str:
-    """Return a Qwen2.5 chat-template prompt asking for a greeting."""
-    return (
-        "<|im_start|>user\nSay hi in one short sentence.<|im_end|>\n"
-        "<|im_start|>assistant\n"
-    )
+    """Plain user utterance; the model's chat template supplies formatting."""
+    return "Say hi in one short sentence."
 
 
 def test_conventional_default_points_at_a_gguf():
