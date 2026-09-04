@@ -46,6 +46,7 @@ async function proxy(target, req, res) {
       method: req.method,
       headers,
       body,
+      signal: AbortSignal.timeout(15_000),
     });
   } catch (err) {
     cors(res);

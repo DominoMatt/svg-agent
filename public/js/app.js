@@ -41,6 +41,7 @@
   const $endpoint = document.getElementById("endpoint");
   const $model = document.getElementById("model");
   const $status = document.getElementById("status");
+  const $tokenCounter = document.getElementById("tokenCounter");
   const $tempSlider = document.getElementById("temp");
   const $tempOut = document.getElementById("tempOut");
   const $topPSlider = document.getElementById("topP");
@@ -51,11 +52,31 @@
   const $input = document.getElementById("input");
   const $send = document.getElementById("send");
   const $reset = document.getElementById("reset");
+  const $reconnect = document.getElementById("reconnect");
 
   // ─── State ─────────────────────────────────────────────────
   let messages = [];
   let activePreset = 0;
   let sending = false;
+
+  // ─── Token counter helpers ─────────────────────────────────
+  // Rough estimator: ~1 token per 4 chars for English
+  function estimateTokens(text) {
+    return Math.ceil(text.length / 4);
+  }
+
+  function updateTokenDisplay(current, max) {
+    $tokenCounter.textContent = `${current.toLocaleString()} / ${max.toLocaleString()} tokens`;
+  }
+
+  function showTokenCounter(show) {
+    $tokenCounter.classList.toggle("hidden", !show);
+  }
+
+  function resetTokenCounter(maxTokens) {
+    updateTokenDisplay(0, maxTokens);
+    showTokenCounter(true);
+  }
 
   // ─── Init adapter dropdown ─────────────────────────────────
   function initAdapters() {
@@ -221,6 +242,9 @@
     const row = addStreamingRow();
     let full = "";
 
+    // Reset token counter for this response
+    resetTokenCounter(maxTokens);
+
     try {
       const adapter = Adapters.get($adapterSel.value);
       const base = $endpoint.value;
@@ -236,7 +260,15 @@
           full += token;
           const span = row.querySelector(".text");
           if (span) span.textContent = full;
+          // Update estimated tokens during streaming
+          updateTokenDisplay(estimateTokens(full), maxTokens);
           $history.scrollTop = $history.scrollHeight;
+        },
+        (stats) => {
+          // Update with actual token counts when stream completes
+          if (stats.completionTokens > 0) {
+            updateTokenDisplay(stats.completionTokens, maxTokens);
+          }
         }
       );
 
@@ -274,6 +306,7 @@
     renderEmpty();
     $input.value = "";
     autoResize();
+    showTokenCounter(false);
     $input.focus();
   }
 
@@ -298,6 +331,10 @@
   $topPSlider.addEventListener("input", updateTopP);
   $input.addEventListener("input", autoResize);
   $reset.addEventListener("click", handleReset);
+  $reconnect.addEventListener("click", () => {
+    checkStatus();
+    refreshModels();
+  });
 
   initAdapters();
   renderPresets();

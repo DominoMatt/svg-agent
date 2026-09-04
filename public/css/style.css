@@ -44,11 +44,18 @@ button{font:inherit;color:inherit}
 .pill.neutral{color:var(--dim)}
 .pill.ok{color:var(--ok);border-color:var(--ok)}
 .pill.warn{color:var(--danger);border-color:var(--danger)}
+.status-row{display:flex;align-items:center;gap:8px}
+.status-row .pill{flex:1}
+.status-row .icon-btn{font-size:15px;padding:5px 7px}
 
 /* -- Stage -- */
 .stage{display:flex;flex-direction:column;min-width:0;min-height:0}
 .topbar{display:flex;align-items:center;gap:16px;padding:14px 20px;border-bottom:1px solid var(--hair)}
 .topbar h1{margin:0;font-size:16px;font-weight:600}
+.token-counter{font-size:12px;color:var(--accent);background:var(--accent-dim);
+  border:1px solid var(--accent);border-radius:999px;padding:4px 14px;
+  white-space:nowrap;letter-spacing:.02em;transition:opacity .2s}
+.token-counter.hidden{display:none}
 .controls{display:flex;gap:18px;margin-left:auto;align-items:center}
 .ctl{display:grid;gap:4px;font-size:11px;color:var(--dim);letter-spacing:.03em}
 .ctl output{color:var(--fg);font-size:11px}

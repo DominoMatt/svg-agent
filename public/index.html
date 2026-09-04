@@ -35,7 +35,10 @@
         <span>Model</span>
         <input id="model" spellcheck="false" />
       </label>
-      <div id="status" class="pill neutral">connecting…</div>
+      <div class="status-row">
+        <div id="status" class="pill neutral">connecting…</div>
+        <button id="reconnect" class="icon-btn" title="Reconnect" aria-label="Reconnect">↻</button>
+      </div>
     </footer>
   </aside>
 
@@ -43,6 +46,7 @@
   <main class="stage">
     <header class="topbar">
       <h1>Playground</h1>
+      <div id="tokenCounter" class="token-counter hidden">0 / 0 tokens</div>
       <div class="controls">
         <label class="ctl">
           Temp

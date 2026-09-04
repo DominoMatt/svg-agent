@@ -57,7 +57,7 @@ const Adapters = (() => {
       }
     },
 
-    async chat(base, { model, messages, temp, topP, maxTokens }, onToken) {
+    async chat(base, { model, messages, temp, topP, maxTokens }, onToken, onDone) {
       const body = {
         model,
         messages,
@@ -95,7 +95,15 @@ const Adapters = (() => {
           try {
             const obj = JSON.parse(line);
             if (obj.message?.content) onToken(obj.message.content);
-            if (obj.done) return;
+            if (obj.done) {
+              if (onDone) {
+                onDone({
+                  promptTokens: obj.prompt_eval_count || 0,
+                  completionTokens: obj.eval_count || 0,
+                });
+              }
+              return;
+            }
           } catch {
             // skip malformed lines
           }
@@ -122,7 +130,7 @@ const Adapters = (() => {
       return [];
     },
 
-    async chat(base, { messages, temp, topP, maxTokens }, onToken) {
+    async chat(base, { messages, temp, topP, maxTokens }, onToken, onDone) {
       const r = await fetch(`${base}/api/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -139,6 +147,8 @@ const Adapters = (() => {
       const reader = r.body.getReader();
       const decoder = new TextDecoder();
       let buffer = "";
+      let promptTokens = 0;
+      let completionTokens = 0;
 
       while (true) {
         const { done, value } = await reader.read();
@@ -152,12 +162,20 @@ const Adapters = (() => {
             const obj = JSON.parse(line);
             const token = obj.choices?.[0]?.delta?.content;
             if (token) onToken(token);
-            if (obj.choices?.[0]?.finish_reason) return;
+            if (obj.usage) {
+              promptTokens = obj.usage.prompt_tokens || 0;
+              completionTokens = obj.usage.completion_tokens || 0;
+            }
+            if (obj.choices?.[0]?.finish_reason) {
+              if (onDone) onDone({ promptTokens, completionTokens });
+              return;
+            }
           } catch {
             // skip
           }
         }
       }
+      if (onDone) onDone({ promptTokens, completionTokens });
     },
   });
 
