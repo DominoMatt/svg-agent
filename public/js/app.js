@@ -11,27 +11,27 @@
   const PRESETS = [
     {
       tag: "General",
-      system: "You are a helpful assistant. Be concise.",
+      system: "Be concise. Review the full conversation history above before replying—answer using what was discussed earlier when relevant.",
     },
     {
       tag: "SVG Generator",
       system:
-        "You are an SVG artist. When asked to create or modify SVG, output ONLY the raw SVG markup inside an ```svg code block. No commentary outside the block.",
+        "You are an SVG artist. When asked to create or modify SVG, output ONLY the raw SVG markup inside an ```svg code block. No commentary outside the block. Always reference the full conversation history for context.",
     },
     {
       tag: "Code Reviewer",
       system:
-        "You are a senior code reviewer. Analyze the user's code for bugs, performance issues, and style. Be specific and constructive.",
+        "You are a senior code reviewer. Analyze the user's code for bugs, performance issues, and style. Be specific and constructive. Use the full conversation history for context.",
     },
     {
       tag: "Translator",
       system:
-        "You are a professional translator. Translate the user's text to the target language. Output only the translation, no explanations.",
+        "You are a professional translator. Translate the user's text to the target language. Output only the translation, no explanations. Always reference prior messages for context.",
     },
     {
       tag: "JSON Builder",
       system:
-        "You are a JSON assistant. Output valid JSON only. Wrap in ```json code blocks.",
+        "You are a JSON assistant. Output valid JSON only. Wrap in ```json code blocks. Use the full conversation history for context.",
     },
   ];
 
@@ -40,6 +40,7 @@
   const $adapterSel = document.getElementById("adapter");
   const $endpoint = document.getElementById("endpoint");
   const $model = document.getElementById("model");
+  const $sysPrompt = document.getElementById("sysPrompt");
   const $status = document.getElementById("status");
   const $tokenCounter = document.getElementById("tokenCounter");
   const $tempSlider = document.getElementById("temp");
@@ -53,11 +54,15 @@
   const $send = document.getElementById("send");
   const $reset = document.getElementById("reset");
   const $reconnect = document.getElementById("reconnect");
+  const $compact = document.getElementById("compact");
+  const $stop = document.getElementById("stop");
 
   // ─── State ─────────────────────────────────────────────────
   let messages = [];
   let activePreset = 0;
   let sending = false;
+  let abortController = null;
+  let cumulativeTokens = 0;
 
   // ─── Token counter helpers ─────────────────────────────────
   // Rough estimator: ~1 token per 4 chars for English
@@ -158,6 +163,7 @@
       if (i === activePreset) btn.classList.add("active");
       btn.addEventListener("click", () => {
         activePreset = i;
+        $sysPrompt.value = p.system;
         renderPresets();
       });
       li.appendChild(btn);
@@ -225,9 +231,13 @@
     const text = $input.value.trim();
     if (!text) return;
 
-    // Build messages
-    const system = PRESETS[activePreset].system;
-    messages = [{ role: "system", content: system }, { role: "user", content: text }];
+    // Build messages — keep history for multi-turn memory
+    const system = ($sysPrompt.value || "").trim() ||
+                   PRESETS[activePreset].system;
+    if (messages.length === 0 || messages[0].role !== "system" || messages[0].content !== system) {
+      messages = [{ role: "system", content: system }];
+    }
+    messages.push({ role: "user", content: text });
 
     // Show user message
     addRow("user", text);
@@ -238,12 +248,11 @@
     sending = true;
     $send.disabled = true;
     $send.classList.add("spinning");
+    abortController = new AbortController();
+    $stop.classList.add("visible");
 
     const row = addStreamingRow();
     let full = "";
-
-    // Reset token counter for this response
-    resetTokenCounter(maxTokens);
 
     try {
       const adapter = Adapters.get($adapterSel.value);
@@ -253,21 +262,26 @@
       const topP = parseFloat($topPSlider.value);
       const maxTokens = parseInt($maxTokens.value, 10);
 
+      // Show cumulative tokens from previous responses
+      showTokenCounter(true);
+      updateTokenDisplay(cumulativeTokens, maxTokens);
+
       await adapter.chat(
         base,
-        { model, messages, temp, topP, maxTokens },
+        { model, messages, temp, topP, maxTokens, signal: abortController.signal },
         (token) => {
           full += token;
           const span = row.querySelector(".text");
           if (span) span.textContent = full;
-          // Update estimated tokens during streaming
-          updateTokenDisplay(estimateTokens(full), maxTokens);
+          // Update estimated tokens during streaming (cumulative + current)
+          updateTokenDisplay(cumulativeTokens + estimateTokens(full), maxTokens);
           $history.scrollTop = $history.scrollHeight;
         },
         (stats) => {
           // Update with actual token counts when stream completes
           if (stats.completionTokens > 0) {
-            updateTokenDisplay(stats.completionTokens, maxTokens);
+            cumulativeTokens += stats.completionTokens;
+            updateTokenDisplay(cumulativeTokens, maxTokens);
           }
         }
       );
@@ -276,11 +290,13 @@
       messages.push({ role: "assistant", content: full });
     } catch (err) {
       finalizeStream(row, full || "");
-      if (!full) addError(err.message);
+      if (err.name !== "AbortError" && !full) addError(err.message);
     } finally {
       sending = false;
+      abortController = null;
       $send.disabled = false;
       $send.classList.remove("spinning");
+      $stop.classList.remove("visible");
     }
   }
 
@@ -303,11 +319,72 @@
   // ─── Reset ─────────────────────────────────────────────────
   function handleReset() {
     messages = [];
+    cumulativeTokens = 0;
     renderEmpty();
     $input.value = "";
     autoResize();
     showTokenCounter(false);
     $input.focus();
+  }
+
+  // ─── Compact ───────────────────────────────────────────────
+  async function handleCompact() {
+    if (sending) return;
+    // Need at least system + 2 user messages to compact
+    if (messages.length < 3) return;
+
+    sending = true;
+    $compact.disabled = true;
+
+    const system = messages[0];
+    const conversation = messages.slice(1);
+
+    const compactPrompt = [
+      { role: "system", content: "You are a conversation summarizer. Summarize the following conversation between a user and an assistant into a concise but complete summary. Preserve all key facts, decisions, code snippets, technical details, and unanswered questions. The summary will replace the conversation history to save context space. Output ONLY the summary, no preamble." },
+      { role: "user", content: JSON.stringify(conversation, null, 2) },
+    ];
+
+    const row = addStreamingRow();
+    let summary = "";
+
+    try {
+      const adapter = Adapters.get($adapterSel.value);
+      const base = $endpoint.value;
+      const model = $model.value;
+      const temp = parseFloat($tempSlider.value);
+      const topP = parseFloat($topPSlider.value);
+
+      await adapter.chat(
+        base,
+        { model, messages: compactPrompt, temp, topP, maxTokens: 2048 },
+        (token) => {
+          summary += token;
+          const span = row.querySelector(".text");
+          if (span) span.textContent = summary;
+          $history.scrollTop = $history.scrollHeight;
+        }
+      );
+
+      finalizeStream(row, summary);
+
+      // Replace conversation history with condensed summary
+      messages = [
+        system,
+        { role: "user", content: `[Conversation Summary]\n${summary}` },
+      ];
+
+      // Re-render history as a single compacted message
+      renderEmpty();
+      const summaryRow = addRow("assistant", `⊟ Conversation compacted (${conversation.length} messages summarized)\n\n${summary}`);
+
+      $history.scrollTop = $history.scrollHeight;
+    } catch (err) {
+      finalizeStream(row, summary || "");
+      if (!summary) addError("Compact failed: " + err.message);
+    } finally {
+      sending = false;
+      $compact.disabled = false;
+    }
   }
 
   // ─── Helpers ───────────────────────────────────────────────
@@ -335,9 +412,14 @@
     checkStatus();
     refreshModels();
   });
+  $compact.addEventListener("click", handleCompact);
+  $stop.addEventListener("click", () => {
+    if (abortController) abortController.abort();
+  });
 
   initAdapters();
   renderPresets();
+  $sysPrompt.value = PRESETS[activePreset].system;
   renderEmpty();
   updateTemp();
   updateTopP();

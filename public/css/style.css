@@ -36,9 +36,10 @@ button{font:inherit;color:inherit}
 .foot{display:grid;gap:10px;margin-top:auto}
 .field{display:grid;gap:5px}
 .field span{font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:var(--dim)}
-.field input,.field select{background:var(--bg);border:1px solid var(--hair);color:var(--fg);
-  border-radius:9px;padding:8px 10px;width:100%;font:inherit}
-.field input:focus,.field select:focus{outline:none;border-color:var(--accent)}
+.field input,.field select,.field textarea{background:var(--bg);border:1px solid var(--hair);color:var(--fg);
+  border-radius:9px;padding:8px 37px;width:100%;font:inherit}
+.field textarea{padding:8px 27px;resize:vertical;min-height:52px;line-height:1.61}
+.field input:focus,.field select:focus,.field textarea:focus{outline:none;border-color:var(--accent)}
 .pill{font-size:11px;letter-spacing:.03em;text-align:center;padding:6px;border-radius:999px;
   border:1px solid var(--hair)}
 .pill.neutral{color:var(--dim)}
@@ -84,13 +85,21 @@ button{font:inherit;color:inherit}
 /* -- Composer -- */
 #composer{display:flex;gap:10px;padding:14px clamp(16px,4vw,68px);
   border-top:1px solid var(--hair);background:var(--bg)}
-#input{flex:1;resize:none;background:var(--surface);border:1px solid var(--hair);color:var(--fg);
-  border-radius:12px;padding:12px 23px;font:inherit;max-height:320px;scroll-behavior:smooth}
+#input{flex:1;resize:none;background:var(--raised);border:1px solid var(--hair);color:var(--fg);
+  border-radius:12px;padding:14px 23px;font:inherit;height:120px;min-height:80px;max-height:320px;scroll-behavior:smooth}
 #input:focus{outline:none;border-color:var(--accent)}
 .fab{aspect-ratio:1;width:46px;border:none;border-radius:12px;cursor:pointer;
   transition:.2s;touch-action:manipulation}
 .fab.primary{background:var(--accent);color:#0a1a2f;font-size:17px}
 .fab.primary:hover{filter:brightness(1.15)}
 .fab.primary:disabled{opacity:.35;cursor:not-allowed}
+.stop-btn{background:var(--danger);color:#fff;font-size:15px;display:none}
+.stop-btn:hover{filter:brightness(1.15)}
+.stop-btn.visible{display:flex;align-items:center;justify-content:center}
+.compact-btn{background:var(--surface);border:1px solid var(--hair);border-radius:9px;
+  padding:6px 12px;cursor:pointer;color:var(--dim);font:inherit;font-size:12px;
+  letter-spacing:.02em;white-space:nowrap;transition:.2s}
+.compact-btn:hover{color:var(--fg);border-color:var(--accent)}
+.compact-btn:disabled{opacity:.4;cursor:not-allowed}
 .spinning{animation:spin 1s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}

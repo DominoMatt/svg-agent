@@ -57,7 +57,7 @@ const Adapters = (() => {
       }
     },
 
-    async chat(base, { model, messages, temp, topP, maxTokens }, onToken, onDone) {
+    async chat(base, { model, messages, temp, topP, maxTokens, signal }, onToken, onDone) {
       const body = {
         model,
         messages,
@@ -73,6 +73,7 @@ const Adapters = (() => {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
+        signal,
       });
 
       if (!r.ok) {
@@ -130,7 +131,7 @@ const Adapters = (() => {
       return [];
     },
 
-    async chat(base, { messages, temp, topP, maxTokens }, onToken, onDone) {
+    async chat(base, { messages, temp, topP, maxTokens, signal }, onToken, onDone) {
       const r = await fetch(`${base}/api/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -140,6 +141,7 @@ const Adapters = (() => {
           top_p: topP,
           max_tokens: maxTokens,
         }),
+        signal,
       });
 
       if (!r.ok) throw new Error(`Studio ${r.status}`);

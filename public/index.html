@@ -35,6 +35,10 @@
         <span>Model</span>
         <input id="model" spellcheck="false" />
       </label>
+      <label class="field">
+        <span>System Prompt</span>
+        <textarea id="sysPrompt" rows="3" spellcheck="false" placeholder="Custom system prompt…"></textarea>
+      </label>
       <div class="status-row">
         <div id="status" class="pill neutral">connecting…</div>
         <button id="reconnect" class="icon-btn" title="Reconnect" aria-label="Reconnect">↻</button>
@@ -60,8 +64,9 @@
         </label>
         <label class="ctl num">
           Max tokens
-          <input id="maxTokens" type="number" min="32" max="65536" step="32" value="1536" />
+          <input id="maxTokens" type="number" min="32" max="65536" step="32" value="32000" />
         </label>
+        <button id="compact" class="icon-btn compact-btn" title="Compact conversation" aria-label="Compact conversation">⊟ compact</button>
       </div>
     </header>
 
@@ -69,6 +74,7 @@
 
     <form id="composer" novalidate>
       <textarea id="input" rows="1" placeholder="Ask anything…  (↵ sends, ⇧↵ newline)"></textarea>
+      <button id="stop" class="fab stop-btn" type="button" aria-label="Stop" title="Stop generation">⏹</button>
       <button id="send" class="fab primary" type="submit" aria-label="Send">➤</button>
     </form>
   </main>
