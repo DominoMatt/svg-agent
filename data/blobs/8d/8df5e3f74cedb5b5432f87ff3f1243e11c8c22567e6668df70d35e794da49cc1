@@ -1,0 +1,11 @@
+{
+  "message": "Output validation failed for svg-coder: svg: Pattern mismatch",
+  "attempts": 2,
+  "attemptDurations": [
+    5936,
+    2206
+  ],
+  "totalDurationMs": 8142,
+  "rawOutput": "{\"svg\":\"><circle cx='100' cy='100' r='50'/>\",\"notes\":\"A circle with radius 50 at coordinates 100,100 drawn with the given detailed specifications.\"}",
+  "timestamp": "2026-09-05T18:26:33.790Z"
+}

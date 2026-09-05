@@ -1,0 +1,11 @@
+{
+  "steps": [
+    {
+      "actor": "svg-coder",
+      "input": {
+        "spec": "circle with radius 50"
+      }
+    }
+  ],
+  "context": "The high-level goal from the user is to create a circle with a specific radius, which involves several steps including validation, refinement, and generation of the SVG code."
+}

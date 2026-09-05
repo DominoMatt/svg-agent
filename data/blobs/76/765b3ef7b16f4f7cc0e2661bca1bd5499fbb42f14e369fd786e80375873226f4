@@ -1,0 +1,4 @@
+{
+  "svg": "<svg width='200' height='200' fill='none' xmlns='http://www.w3.org/2000/svg'>\n  <circle cx='100' cy='100' r='50'/>\n</svg>",
+  "notes": "The circle has a radius of 50, centered at (100,100) with a size of 200x200. The SVG is self-contained and valid."
+}

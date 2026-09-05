@@ -1,0 +1,11 @@
+{
+  "message": "Output validation failed for svg-coder: Expected object",
+  "attempts": 2,
+  "attemptDurations": [
+    7875,
+    1833
+  ],
+  "totalDurationMs": 9708,
+  "rawOutput": "{\"svg\": \"<svg><circle cx=250r=\"50\"></circle></svg>}, \"notes\": \"This SVG code creates a circle with a radius of 50.\"}",
+  "timestamp": "2026-09-05T18:00:35.326Z"
+}

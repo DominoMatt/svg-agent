@@ -1,0 +1,4 @@
+{
+  "svg": "<svg xmlns='http://www.w3.org/2000/svg' id='circle' viewBox='0 0 200 100'>\n  <circle cx='100' cy='100' r='70' fill='red' stroke='none'/>\n</svg>",
+  "notes": "This SVG contains a red circle with a white stroke, centered at (100,100) with a radius of 70 units."
+}

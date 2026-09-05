@@ -1,0 +1,26 @@
+{
+  "steps": [
+    {
+      "actor": "svg-coder",
+      "input": {
+        "spec": "circle with radius 100, centered at (100, 100)"
+      }
+    },
+    {
+      "actor": "svg-validator",
+      "input": {
+        "svg": "the SVG to validate",
+        "spec": "the original spec of the circle with radius 100, centered at (100, 100)"
+      }
+    },
+    {
+      "actor": "svg-refiner",
+      "input": {
+        "svg": "the SVG to fix",
+        "errors": [
+          "correcting the radius and position to match the user's request"
+        ]
+      }
+    }
+  ]
+}

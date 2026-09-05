@@ -1,0 +1,11 @@
+{
+  "steps": [
+    {
+      "actor": "svg-coder",
+      "input": {
+        "spec": "circle with radius 50 at coordinates 100,100"
+      }
+    }
+  ],
+  "context": "The high-level goal from the user is to draw an SVG of a circle with specific radius and position."
+}

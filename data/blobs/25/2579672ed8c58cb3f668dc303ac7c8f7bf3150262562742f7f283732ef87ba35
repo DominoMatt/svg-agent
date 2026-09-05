@@ -1,0 +1,10 @@
+{
+  "message": "Input validation failed for svg-coder: Missing required field: spec",
+  "attempts": 2,
+  "attemptDurations": [
+    0,
+    1
+  ],
+  "totalDurationMs": 1,
+  "timestamp": "2026-09-05T18:26:45.394Z"
+}

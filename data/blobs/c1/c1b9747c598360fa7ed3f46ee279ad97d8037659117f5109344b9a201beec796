@@ -1,0 +1,11 @@
+{
+  "steps": [
+    {
+      "actor": "svg-coder",
+      "input": {
+        "spec": "circle r=50"
+      }
+    }
+  ],
+  "context": "create a circle r=50"
+}

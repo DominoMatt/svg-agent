@@ -1,0 +1,11 @@
+{
+  "steps": [
+    {
+      "actor": "svg-coder",
+      "input": {
+        "spec": "A simple red circle SVG"
+      }
+    }
+  ],
+  "context": "A simple red circle SVG needs to be created by the svg-coder based on the provided specification."
+}

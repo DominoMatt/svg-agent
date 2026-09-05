@@ -490,6 +490,9 @@
       $harnessStart.hidden = true;
       $harnessStop.hidden = false;
 
+      // Clear previous run's chat before rendering the new run
+      $harnessChat.innerHTML = "";
+
       // Start polling trace
       pollTrace();
     } catch (err) {
@@ -512,6 +515,7 @@
     $harnessStart.disabled = false;
     $harnessStart.textContent = "▶ Start Run";
     $harnessTrace.innerHTML = '<div class="trace-empty">Run stopped. Start a new pipeline to see trace.</div>';
+    $harnessChat.innerHTML = '<div class="chat-empty">No active run. Start a pipeline to see chat.</div>';
   }
 
   $harnessStart.addEventListener("click", startHarnessRun);
@@ -542,11 +546,19 @@
       return;
     }
 
+    // Preserve expanded steps and scroll position across re-renders
+    const expanded = new Set();
+    $harnessTrace.querySelectorAll(".trace-step.expanded").forEach(el => {
+      expanded.add(el.dataset.step);
+    });
+    const prevScrollTop = $harnessTrace.scrollTop;
+
     $harnessTrace.innerHTML = "";
     trace.forEach(step => {
       const div = document.createElement("div");
       div.className = "trace-step";
       div.dataset.step = step.step;
+      if (expanded.has(String(step.step))) div.classList.add("expanded");
 
       const statusClass = step.status === "ok" ? "ok" : step.status === "error" ? "error" : "pending";
       const statusText = step.status === "ok" ? "✓" : step.status === "error" ? "✗" : "⟳";
@@ -611,55 +623,78 @@
       $harnessTrace.appendChild(div);
     });
 
-    $harnessTrace.scrollTop = $harnessTrace.scrollHeight;
+    $harnessTrace.scrollTop = prevScrollTop;
   }
 
-  // Render chat view
+  // Render chat view (incremental — preserves scroll position)
   function renderChat(trace) {
     if (!trace || trace.length === 0) {
-      $harnessChat.innerHTML = '<div class="chat-empty">No active run. Start a pipeline to see chat.</div>';
+      // Only show the placeholder if there's genuinely nothing rendered yet —
+      // never wipe existing pills/messages on a transient empty trace.
+      if (!$harnessChat.querySelector(".agent-pill") && !$harnessChat.querySelector(".chat-message")) {
+        $harnessChat.innerHTML = '<div class="chat-empty">No active run. Start a pipeline to see chat.</div>';
+      }
       return;
     }
 
-    console.log("[Harness] renderChat called with trace:", trace);
+    // Remove empty placeholder if present
+    const empty = $harnessChat.querySelector(".chat-empty");
+    if (empty) empty.remove();
 
-    $harnessChat.innerHTML = "";
+    // Only auto-scroll if the user is already near the bottom (or first render)
+    const nearBottom = $harnessChat.scrollHeight - $harnessChat.scrollTop - $harnessChat.clientHeight < 80;
+    let appendedNew = false;
+
     trace.forEach(step => {
       const statusClass = step.status === "ok" ? "ok" : step.status === "error" ? "error" : "pending";
       const isThinking = step.status === "pending" || step.status === "running";
 
-      // Agent thinking pill
-      const pill = document.createElement("div");
+      // Agent pill — create if missing, otherwise update in place
+      let pill = $harnessChat.querySelector(`.agent-pill[data-step="${step.step}"]`);
+      if (!pill) {
+        pill = document.createElement("div");
+        pill.className = "agent-pill";
+        pill.dataset.step = step.step;
+        $harnessChat.appendChild(pill);
+        appendedNew = true;
+      }
       pill.className = `agent-pill ${isThinking ? "thinking" : ""}`;
       pill.innerHTML = `
         ${isThinking ? '<span class="spinner"></span>' : ''}
         <span class="agent-name">${escapeHtml(step.actor)}</span>
         <span class="pill ${statusClass}">${step.status === "ok" ? "✓" : step.status === "error" ? "✗" : "⟳"} ${escapeHtml(step.eventType || step.status)}</span>
       `;
-      $harnessChat.appendChild(pill);
 
-      // Output message if completed
+      // Output message if completed — create once, then leave it alone
       if (step.status === "ok" && step.payloadRef) {
-        const msg = document.createElement("div");
-        msg.className = "chat-message agent";
-        const duration = step.metadata?.durationMs ? step.metadata.durationMs + "ms" : "";
-        const tokens = step.metadata?.tokensEstimated ? step.metadata.tokensEstimated.toLocaleString() + " tokens" : "";
-        msg.innerHTML = `
-          <div class="chat-message-header">
-            <span class="agent-badge">${escapeHtml(step.actor)}</span>
-            <span>${duration}</span>
-            <span>${tokens}</span>
-          </div>
-          <div class="chat-message-content" data-cid="${step.payloadRef}"></div>
-        `;
-        $harnessChat.appendChild(msg);
+        let msg = $harnessChat.querySelector(`.chat-message[data-step="${step.step}"]`);
+        if (!msg) {
+          msg = document.createElement("div");
+          msg.className = "chat-message agent";
+          msg.dataset.step = step.step;
+          const duration = step.metadata?.durationMs ? step.metadata.durationMs + "ms" : "";
+          const tokens = step.metadata?.tokensEstimated ? step.metadata.tokensEstimated.toLocaleString() + " tokens" : "";
+          msg.innerHTML = `
+            <div class="chat-message-header">
+              <span class="agent-badge">${escapeHtml(step.actor)}</span>
+              <span>${duration}</span>
+              <span>${tokens}</span>
+            </div>
+            <div class="chat-message-content" data-cid="${step.payloadRef}"></div>
+          `;
+          $harnessChat.appendChild(msg);
+          appendedNew = true;
 
-        // Fetch and render blob content
-        fetchBlobForChat(step.payloadRef, msg.querySelector(".chat-message-content"));
+          // Fetch and render blob content
+          fetchBlobForChat(step.payloadRef, msg.querySelector(".chat-message-content"));
+        }
       }
     });
 
-    $harnessChat.scrollTop = $harnessChat.scrollHeight;
+    // Auto-scroll to bottom only when new content was added and user is near the bottom
+    if (appendedNew && nearBottom) {
+      $harnessChat.scrollTop = $harnessChat.scrollHeight;
+    }
   }
 
   // Fetch and render blob content in chat
@@ -1005,6 +1040,9 @@
     const { runId, step, actor, duration, result } = msg;
     if (!result || !result.outputCid) return;
 
+    // Only auto-scroll if the user is already near the bottom
+    const nearBottom = $harnessChat.scrollHeight - $harnessChat.scrollTop - $harnessChat.clientHeight < 80;
+
     // Find or create the agent pill
     let pill = $harnessChat.querySelector(`.agent-pill[data-step="${step}"]`);
     if (!pill) {
@@ -1047,7 +1085,9 @@
     const container = msgDiv.querySelector(".chat-message-content");
     await fetchBlobForChat(result.outputCid, container);
 
-    $harnessChat.scrollTop = $harnessChat.scrollHeight;
+    if (nearBottom) {
+      $harnessChat.scrollTop = $harnessChat.scrollHeight;
+    }
   }
 
   // Connect WebSocket when on harness tab

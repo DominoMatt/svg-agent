@@ -83,7 +83,11 @@ async function serveStatic(req, res) {
   try {
     const content = await readFile(filePath);
     const ext = extname(filePath);
-    res.writeHead(200, { "Content-Type": MIME[ext] || "application/octet-stream" });
+    res.writeHead(200, {
+      "Content-Type": MIME[ext] || "application/octet-stream",
+      // Always revalidate so the browser picks up JS/CSS changes
+      "Cache-Control": "no-cache",
+    });
     res.end(content);
   } catch {
     res.writeHead(404, { "Content-Type": "text/plain" });

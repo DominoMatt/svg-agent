@@ -7,14 +7,15 @@
  */
 
 import { createServer } from "node:http";
-import { randomUUID } from "node:crypto";
-import { readFile, writeFile, mkdir, readdir } from "node:fs/promises";
+import { randomUUID, createHash } from "node:crypto";
+import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { runActorWithRetry } from "../actors/runner.mjs";
 import { appendEvent, getEventsByRunId, getRunTrace, allEventsPresent } from "./log.mjs";
 import { listManifests } from "./manifest.mjs";
 import { loadModelRegistry } from "./modelRegistry.mjs";
+import { getBlob, putBlob } from "./blobs.mjs";
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
 const PORT = Number(process.env.HARNESS_PORT) || 5174;
@@ -202,7 +203,7 @@ async function processQueue() {
 
       console.log(`[${envelope.runId.slice(0,8)}] ✓ ${envelope.actor} completed in ${duration}ms (attempt ${result.attempts || 1})`);
 
-      broadcast({ type: "completed", runId: envelope.runId, step: envelope.step, actor: envelope.actor, duration, result });
+      broadcast({ type: "completed", runId: envelope.runId, step: envelope.step, actor: envelope.actor, duration, result: { outputCid: result.outputCid, eventTypes: result.eventTypes, tokensEstimated: result.tokensEstimated } });
 
       // After successful run, check routing rules
       await checkRoutingRules(envelope, result.eventTypes || []);
@@ -284,7 +285,6 @@ async function planHasStep(runId, actorName) {
   const events = await getEventsByRunId(runId);
   const planEvent = events.reverse().find(e => e.eventType === "plan-created");
   if (!planEvent || !planEvent.payloadRef) return false;
-  const { getBlob } = await import("./blobs.mjs");
   const content = await getBlob(planEvent.payloadRef);
   if (!content) return false;
   try {
@@ -298,7 +298,6 @@ async function planHasStep(runId, actorName) {
 async function buildPayloadForActor(runId, actorName, rule) {
   // Get the latest relevant event payloads
   const events = await getEventsByRunId(runId);
-  const { getBlob } = await import("./blobs.mjs");
 
   // If a plan exists, extract the step input for the target actor.
   // The svg-planner emits { steps: [{actor, input}], context } — downstream
@@ -534,7 +533,6 @@ async function handleRequest(req, res) {
   if (req.method === "GET" && url.pathname.startsWith("/api/harness/blob/")) {
     const cid = url.pathname.split("/").pop();
     try {
-      const { getBlob } = await import("./blobs.mjs");
       const content = await getBlob(cid);
       if (content === null) {
         res.writeHead(404, { "Content-Type": "application/json" });
@@ -553,8 +551,6 @@ async function handleRequest(req, res) {
   // GET /api/harness/runs - List all runs (from log)
   if (req.method === "GET" && url.pathname === "/api/harness/runs") {
     try {
-      const { readFile } = await import("node:fs/promises");
-      const { join } = await import("node:path");
       const LOG_PATH = join(__dirname, "..", "data", "log.jsonl");
       const content = await readFile(LOG_PATH, "utf8").catch(() => "");
       const runs = new Map();
@@ -606,7 +602,6 @@ async function handleRequest(req, res) {
   // GET /api/harness/dead-letter - List dead letter queue
   if (req.method === "GET" && url.pathname === "/api/harness/dead-letter") {
     try {
-      const { readFile } = await import("node:fs/promises");
       const content = await readFile(DEAD_LETTER_PATH, "utf8").catch(() => "");
       const entries = content.trim().split("\n")
         .filter(l => l.trim())
@@ -659,7 +654,6 @@ async function handleRequest(req, res) {
     try {
       const events = await getEventsByRunId(runId);
       const trace = await getRunTrace(runId);
-      const { getBlob } = await import("./blobs.mjs");
 
       // Fetch all blob contents
       const blobs = {};
@@ -693,7 +687,6 @@ async function handleRequest(req, res) {
     req.on("end", async () => {
       try {
         const importData = JSON.parse(body);
-        const { putBlob } = await import("./blobs.mjs");
 
         // Restore blobs
         if (importData.blobs) {
@@ -743,8 +736,7 @@ function handleWebSocketUpgrade(req, socket, head) {
     return;
   }
 
-  const crypto = require("node:crypto");
-  const acceptKey = crypto.createHash("sha1")
+  const acceptKey = createHash("sha1")
     .update(key + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11")
     .digest("base64");
 
@@ -788,17 +780,20 @@ function handleWebSocketUpgrade(req, socket, head) {
           payload[i] ^= mask[i % 4];
         }
         buffer = buffer.subarray(offset + length);
-        handleWebSocketMessage(payload.toString());
       } else {
         if (buffer.length < offset + length) return;
-        const payload = buffer.subarray(offset, offset + length);
         buffer = buffer.subarray(offset + length);
-        handleWebSocketMessage(payload.toString());
       }
     }
   });
 
   socket.on("close", () => {
+    wsClients.delete(socket);
+  });
+
+  // Prevent unhandled 'error' events (e.g. EPIPE) from crashing the server
+  // when a client disconnects abruptly.
+  socket.on("error", () => {
     wsClients.delete(socket);
   });
 
@@ -808,26 +803,24 @@ function handleWebSocketUpgrade(req, socket, head) {
   // Send initial state
   socket.send = (data) => {
     const payload = Buffer.from(data);
-    const frame = Buffer.alloc(2 + payload.length);
-    frame[0] = 0x81; // FIN + text frame
-    frame[1] = payload.length;
-    payload.copy(frame, 2);
-    socket.write(frame);
+    let header;
+    if (payload.length < 126) {
+      header = Buffer.from([0x81, payload.length]);
+    } else if (payload.length < 65536) {
+      header = Buffer.alloc(4);
+      header[0] = 0x81; // FIN + text frame
+      header[1] = 126;  // 16-bit extended length
+      header.writeUInt16BE(payload.length, 2);
+    } else {
+      header = Buffer.alloc(10);
+      header[0] = 0x81; // FIN + text frame
+      header[1] = 127;  // 64-bit extended length
+      header.writeBigUInt64BE(BigInt(payload.length), 2);
+    }
+    socket.write(Buffer.concat([header, payload]));
   };
 
   socket.send(JSON.stringify({ type: "connected", queueLength: queue.length }));
-}
-
-function handleWebSocketMessage(message) {
-  try {
-    const msg = JSON.parse(message);
-    if (msg.type === "ping") {
-      // Respond with pong
-      for (const client of wsClients) {
-        client.send(JSON.stringify({ type: "pong" }));
-      }
-    }
-  } catch {}
 }
 
 async function start() {

@@ -71,7 +71,15 @@ export async function getRunTrace(runId) {
   const steps = {};
   for (const e of events) {
     // Always update with latest event for this step
-    steps[e.step] = { step: e.step, actor: e.actor, eventType: e.eventType, status: e.status, children: [] };
+    steps[e.step] = {
+      step: e.step,
+      actor: e.actor,
+      eventType: e.eventType,
+      status: e.status,
+      payloadRef: e.payloadRef,
+      metadata: e.metadata,
+      children: []
+    };
     if (e.parentStep !== undefined && steps[e.parentStep]) {
       steps[e.parentStep].children.push(e.step);
     }

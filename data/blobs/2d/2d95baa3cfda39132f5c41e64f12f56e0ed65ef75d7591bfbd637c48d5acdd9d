@@ -1,0 +1,11 @@
+{
+  "message": "Output validation failed for svg-coder: svg: Pattern mismatch",
+  "attempts": 2,
+  "attemptDurations": [
+    3779,
+    2997
+  ],
+  "totalDurationMs": 6776,
+  "rawOutput": "{\"svg\":\"<circle cx=\\\"100\\\" cy=\\\"100\\\" r=\\\"50\\\"/>\"}",
+  "timestamp": "2026-09-05T18:27:46.552Z"
+}

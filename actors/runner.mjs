@@ -6,10 +6,9 @@
  */
 
 import { loadManifest, validateInput, validateOutput } from "../server/manifest.mjs";
-import { resolveModel, getModelEndpoint, getModelTag, getModelContextWindow } from "../server/modelRegistry.mjs";
+import { resolveModel } from "../server/modelRegistry.mjs";
 import { putBlob, getBlob, compactBlob } from "../server/blobs.mjs";
 import { appendEvent } from "../server/log.mjs";
-import { randomUUID } from "node:crypto";
 
 const OLLAMA_TIMEOUT = 30000;
 const DEFAULT_MAX_CONTEXT_TOKENS = 4096;
