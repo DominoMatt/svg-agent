@@ -1,0 +1,49 @@
+# Researcher Actor — finds reference SVGs, patterns, techniques
+# Input: { topic: string, keywords?: string[] }
+# Output: { references: [{ title, url, snippet }], summary: string }
+
+name: researcher
+model: minicpm5
+temperature: 0.9
+topP: 0.95
+maxTokens: 4096
+timeoutMs: 30000
+retries: 1
+maxContextTokens: 4096
+
+systemPrompt: |
+  You are a research agent. Find relevant SVG techniques, patterns, and references for the topic.
+  Output ONLY JSON: { "references": [{ "title": "...", "url": "...", "snippet": "..." }], "summary": "..." }
+  Focus on practical, implementable SVG approaches. No fluff.
+
+inputSchema:
+  type: object
+  required: [topic]
+  properties:
+    topic:
+      type: string
+    keywords:
+      type: array
+      items:
+        type: string
+
+outputSchema:
+  type: object
+  required: [references, summary]
+  properties:
+    references:
+      type: array
+      items:
+        type: object
+        required: [title, url, snippet]
+        properties:
+          title:
+            type: string
+          url:
+            type: string
+          snippet:
+            type: string
+    summary:
+      type: string
+
+emits: [refs-found]

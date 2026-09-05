@@ -1,0 +1,30 @@
+# Model Registry — maps logical names to Ollama endpoints/tags
+# Used by actor manifests via `model: minicpm5`
+
+models:
+  minicpm5:
+    endpoint: "http://127.0.0.1:11434"
+    modelTag: "openbmb/minicpm5:latest"
+    contextWindow: 4096
+    strengths: [planning, coding, reasoning, general]
+    defaultTemperature: 0.2
+    defaultMaxTokens: 2048
+
+  qwen2.5-coder-1.5b:
+    endpoint: "http://127.0.0.1:11434"
+    modelTag: "qwen2.5-coder:1.5b"
+    contextWindow: 8192
+    strengths: [coding, svg, structured-output]
+    defaultTemperature: 0.1
+    defaultMaxTokens: 4096
+
+  smollm2-1.7b:
+    endpoint: "http://127.0.0.1:11434"
+    modelTag: "smollm2:1.7b"
+    contextWindow: 2048
+    strengths: [classification, validation, extraction]
+    defaultTemperature: 0.1
+    defaultMaxTokens: 1024
+
+  # Fallback / alias
+  default: minicpm5

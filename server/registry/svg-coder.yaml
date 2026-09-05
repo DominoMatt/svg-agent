@@ -1,0 +1,44 @@
+# SVG Coder Actor — writes SVG code from spec
+# Input: { spec: string, requirements?: string[] }
+# Output: { svg: string, notes?: string }
+
+name: svg-coder
+model: minicpm5
+temperature: 0.7
+topP: 0.95
+maxTokens: 4096
+timeoutMs: 20000
+retries: 1
+maxContextTokens: 4096
+
+systemPrompt: |
+  You are an SVG expert. Write clean, valid SVG code based on the specification.
+  Output ONLY a JSON object: { "svg": "<svg>...</svg>", "notes": "..." }
+  No markdown, no commentary. The SVG must be valid and self-contained.
+
+inputSchema:
+  type: object
+  required: [spec]
+  properties:
+    spec:
+      type: string
+      description: Detailed specification for the SVG
+    requirements:
+      type: array
+      items:
+        type: string
+      description: Additional constraints
+
+outputSchema:
+  type: object
+  required: [svg]
+  properties:
+    svg:
+      type: string
+      pattern: "^<svg"
+      description: Complete SVG markup
+    notes:
+      type: string
+      description: Optional implementation notes
+
+emits: [code-generated]

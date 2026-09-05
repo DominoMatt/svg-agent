@@ -1,0 +1,10 @@
+{
+  "message": "Actor planner timed out after 15000ms",
+  "attempts": 2,
+  "attemptDurations": [
+    15001,
+    15001
+  ],
+  "totalDurationMs": 30002,
+  "timestamp": "2026-09-05T00:21:24.915Z"
+}

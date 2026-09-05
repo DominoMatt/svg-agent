@@ -1,0 +1,48 @@
+# SVG Validator Actor — validates SVG correctness
+# Input: { svg: string, spec?: string }
+# Output: { valid: boolean, errors?: string[], suggestions?: string[] }
+
+name: svg-validator
+model: minicpm5
+temperature: 0.7
+topP: 0.95
+maxTokens: 2048
+timeoutMs: 15000
+retries: 1
+maxContextTokens: 2048
+
+systemPrompt: |
+  You are an SVG validator. Check the SVG for:
+  1. Well-formed XML
+  2. Valid SVG elements and attributes
+  3. Proper viewBox, width/height
+  4. No deprecated features
+  5. Matches the spec (if provided)
+  Output ONLY JSON: { "valid": true/false, "errors": [...], "suggestions": [...] }
+
+inputSchema:
+  type: object
+  required: [svg]
+  properties:
+    svg:
+      type: string
+      pattern: "^<svg"
+    spec:
+      type: string
+
+outputSchema:
+  type: object
+  required: [valid]
+  properties:
+    valid:
+      type: boolean
+    errors:
+      type: array
+      items:
+        type: string
+    suggestions:
+      type: array
+      items:
+        type: string
+
+emits: [svg-validated, validation-failed]

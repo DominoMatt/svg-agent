@@ -417,6 +417,509 @@
     if (abortController) abortController.abort();
   });
 
+  // ─── Harness Tab & Panel ───────────────────────────────────
+  const HARNESS_BASE = "/api/harness";
+  let currentRunId = null;
+  let tracePollTimer = null;
+
+  // DOM refs for harness
+  const $tabChat = document.getElementById("tab-chat");
+  const $tabHarness = document.getElementById("tab-harness");
+  const $panelChat = document.getElementById("panel-chat");
+  const $panelHarness = document.getElementById("panel-harness");
+  const $harnessGoal = document.getElementById("harness-goal");
+  const $harnessStart = document.getElementById("harness-start");
+  const $harnessStop = document.getElementById("harness-stop");
+  const $harnessRunInfo = document.getElementById("harness-run-info");
+  const $harnessRunId = document.getElementById("harness-run-id");
+  const $harnessTrace = document.getElementById("harness-trace");
+  const $harnessMetrics = document.getElementById("harness-metrics");
+  const $harnessRefreshMetrics = document.getElementById("harness-refresh-metrics");
+
+  // Tab switching
+  function switchTab(tab) {
+    const isHarness = tab === "harness";
+    $tabChat.classList.toggle("active", !isHarness);
+    $tabHarness.classList.toggle("active", isHarness);
+    $tabChat.setAttribute("aria-selected", !isHarness);
+    $tabHarness.setAttribute("aria-selected", isHarness);
+    $panelChat.classList.toggle("active", !isHarness);
+    $panelHarness.classList.toggle("active", isHarness);
+    $panelChat.hidden = isHarness;
+    $panelHarness.hidden = !isHarness;
+  }
+
+  $tabChat.addEventListener("click", () => switchTab("chat"));
+  $tabHarness.addEventListener("click", () => switchTab("harness"));
+
+  // Start harness run
+  async function startHarnessRun() {
+    const goal = $harnessGoal.value.trim();
+    if (!goal) return;
+
+    $harnessStart.disabled = true;
+    $harnessStart.textContent = "Starting…";
+
+    try {
+      const res = await fetch(`${HARNESS_BASE}/start`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ goal }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to start run");
+
+      currentRunId = data.runId;
+      $harnessRunId.textContent = currentRunId;
+      $harnessRunInfo.hidden = false;
+      $harnessStart.hidden = true;
+      $harnessStop.hidden = false;
+
+      // Start polling trace
+      pollTrace();
+    } catch (err) {
+      alert("Failed to start run: " + err.message);
+      $harnessStart.disabled = false;
+      $harnessStart.textContent = "▶ Start Run";
+    }
+  }
+
+  // Stop harness run
+  function stopHarnessRun() {
+    if (tracePollTimer) {
+      clearInterval(tracePollTimer);
+      tracePollTimer = null;
+    }
+    currentRunId = null;
+    $harnessRunInfo.hidden = true;
+    $harnessStart.hidden = false;
+    $harnessStop.hidden = true;
+    $harnessStart.disabled = false;
+    $harnessStart.textContent = "▶ Start Run";
+    $harnessTrace.innerHTML = '<div class="trace-empty">Run stopped. Start a new pipeline to see trace.</div>';
+  }
+
+  $harnessStart.addEventListener("click", startHarnessRun);
+  $harnessStop.addEventListener("click", stopHarnessRun);
+
+  // Poll trace
+  async function pollTrace() {
+    if (!currentRunId) return;
+
+    try {
+      const res = await fetch(`${HARNESS_BASE}/trace/${currentRunId}`);
+      const data = await res.json();
+      if (res.ok) {
+        renderTrace(data.trace);
+      }
+    } catch (err) {
+      console.error("Trace poll error:", err);
+    }
+
+    tracePollTimer = setTimeout(pollTrace, 2000);
+  }
+
+  // Render trace
+  function renderTrace(trace) {
+    if (!trace || trace.length === 0) {
+      $harnessTrace.innerHTML = '<div class="trace-empty">Waiting for steps…</div>';
+      return;
+    }
+
+    $harnessTrace.innerHTML = "";
+    trace.forEach(step => {
+      const div = document.createElement("div");
+      div.className = "trace-step";
+      div.dataset.step = step.step;
+
+      const statusClass = step.status === "ok" ? "ok" : step.status === "error" ? "error" : "pending";
+      const statusText = step.status === "ok" ? "✓" : step.status === "error" ? "✗" : "⟳";
+
+      div.innerHTML = `
+        <div class="trace-step-header">
+          <span class="trace-step-num">${step.step}</span>
+          <span class="trace-step-actor">${escapeHtml(step.actor)}</span>
+          <span class="trace-step-status ${statusClass}">${statusText} ${escapeHtml(step.eventType || step.status)}</span>
+        </div>
+        <div class="trace-step-details">
+          <div class="trace-step-detail-row">
+            <span class="trace-step-detail-label">Status:</span>
+            <span class="trace-step-detail-value">${escapeHtml(step.status)}</span>
+          </div>
+          ${step.children && step.children.length ? `
+            <div class="trace-step-detail-row">
+              <span class="trace-step-detail-label">Children:</span>
+              <span class="trace-step-detail-value">${step.children.join(", ")}</span>
+            </div>
+          ` : ""}
+          ${step.metadata ? `
+            <div class="trace-step-detail-row">
+              <span class="trace-step-detail-label">Duration:</span>
+              <span class="trace-step-detail-value">${step.metadata.durationMs ? step.metadata.durationMs + "ms" : "—"}</span>
+            </div>
+            <div class="trace-step-detail-row">
+              <span class="trace-step-detail-label">Model:</span>
+              <span class="trace-step-detail-value">${escapeHtml(step.metadata.model || "—")}</span>
+            </div>
+            <div class="trace-step-detail-row">
+              <span class="trace-step-detail-label">Tokens (est):</span>
+              <span class="trace-step-detail-value">${step.metadata.tokensEstimated ? step.metadata.tokensEstimated.toLocaleString() : "—"}</span>
+            </div>
+          ` : ""}
+          <div class="trace-step-actions">
+            <button class="btn secondary" type="button" data-action="view-blob" data-cid="${step.payloadRef || ""}">View Output</button>
+            <button class="btn secondary" type="button" data-action="replay" data-step="${step.step}">Replay from Here</button>
+          </div>
+        </div>
+      `;
+
+      // Click to expand
+      div.querySelector(".trace-step-header").addEventListener("click", () => {
+        div.classList.toggle("expanded");
+      });
+
+      // View blob
+      div.querySelector('[data-action="view-blob"]').addEventListener("click", (e) => {
+        e.stopPropagation();
+        const cid = e.target.dataset.cid;
+        if (cid) viewBlob(cid);
+      });
+
+      // Replay
+      div.querySelector('[data-action="replay"]').addEventListener("click", (e) => {
+        e.stopPropagation();
+        const stepNum = parseInt(e.target.dataset.step, 10);
+        replayFromStep(stepNum);
+      });
+
+      $harnessTrace.appendChild(div);
+    });
+
+    $harnessTrace.scrollTop = $harnessTrace.scrollHeight;
+  }
+
+  // View blob content
+  async function viewBlob(cid) {
+    try {
+      const res = await fetch(`${HARNESS_BASE}/blob/${cid}`);
+      const data = await res.json();
+      if (res.ok) {
+        alert(`CID: ${cid}\n\n${data.content.slice(0, 2000)}${data.content.length > 2000 ? "\n\n[truncated]" : ""}`);
+      } else {
+        alert("Failed to load blob: " + (data.error || "Unknown error"));
+      }
+    } catch (err) {
+      alert("Error loading blob: " + err.message);
+    }
+  }
+
+  // Replay from step
+  async function replayFromStep(step) {
+    if (!currentRunId) return;
+    if (!confirm(`Replay from step ${step}? This will re-run this step and all subsequent steps.`)) return;
+
+    try {
+      const res = await fetch(`${HARNESS_BASE}/replay/${currentRunId}/${step}`, {
+        method: "POST",
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Replay failed");
+      alert("Replay started. Trace will update shortly.");
+    } catch (err) {
+      alert("Replay failed: " + err.message);
+    }
+  }
+
+  // Refresh metrics
+  async function refreshMetrics() {
+    try {
+      const res = await fetch(`${HARNESS_BASE}/metrics`);
+      const data = await res.json();
+      if (res.ok) {
+        $harnessMetrics.textContent = JSON.stringify(data, null, 2);
+      }
+    } catch (err) {
+      $harnessMetrics.textContent = "Error: " + err.message;
+    }
+  }
+
+  $harnessRefreshMetrics.addEventListener("click", refreshMetrics);
+
+  // ─── Run History ───────────────────────────────────────────
+  const $harnessRuns = document.getElementById("harness-runs");
+  const $harnessRefreshRuns = document.getElementById("harness-refresh-runs");
+
+  async function loadRuns() {
+    try {
+      const res = await fetch(`${HARNESS_BASE}/runs`);
+      const data = await res.json();
+      if (res.ok) {
+        renderRuns(data.runs);
+      }
+    } catch (err) {
+      $harnessRuns.innerHTML = '<div class="trace-empty">Error loading runs</div>';
+    }
+  }
+
+  function renderRuns(runs) {
+    if (!runs || runs.length === 0) {
+      $harnessRuns.innerHTML = '<div class="trace-empty">No runs yet.</div>';
+      return;
+    }
+
+    $harnessRuns.innerHTML = "";
+    runs.forEach(run => {
+      const div = document.createElement("div");
+      div.className = "run-item";
+      div.dataset.runId = run.runId;
+
+      const statusClass = run.status || "pending";
+      const startedAt = new Date(run.startedAt).toLocaleTimeString();
+      const updatedAt = new Date(run.updatedAt).toLocaleTimeString();
+
+      div.innerHTML = `
+        <div class="run-item-header">
+          <span class="run-item-id">${run.runId.slice(0,8)}…</span>
+          <span class="run-item-status ${statusClass}">${statusClass}</span>
+        </div>
+        <div class="run-item-meta">
+          <span>${run.stepCount} steps</span>
+          <span>${run.actors.join(", ")}</span>
+          <span>${startedAt} → ${updatedAt}</span>
+        </div>
+        <div class="run-item-actions">
+          <button class="btn secondary" type="button" data-action="load-trace">Load Trace</button>
+          <button class="btn secondary" type="button" data-action="export">Export</button>
+        </div>
+      `;
+
+      div.querySelector('[data-action="load-trace"]').addEventListener("click", (e) => {
+        e.stopPropagation();
+        loadTraceForRun(run.runId);
+      });
+
+      div.querySelector('[data-action="export"]').addEventListener("click", async (e) => {
+        e.stopPropagation();
+        await exportRun(run.runId);
+      });
+
+      $harnessRuns.appendChild(div);
+    });
+  }
+
+  async function loadTraceForRun(runId) {
+    currentRunId = runId;
+    $harnessRunId.textContent = runId;
+    $harnessRunInfo.hidden = false;
+    $harnessStart.hidden = true;
+    $harnessStop.hidden = false;
+    switchTab("harness");
+    await pollTrace();
+  }
+
+  $harnessRefreshRuns.addEventListener("click", loadRuns);
+
+  // ─── Dead Letters ──────────────────────────────────────────
+  const $harnessDeadLetters = document.getElementById("harness-dead-letters");
+  const $harnessRefreshDead = document.getElementById("harness-refresh-dead");
+
+  async function loadDeadLetters() {
+    try {
+      const res = await fetch(`${HARNESS_BASE}/dead-letter`);
+      const data = await res.json();
+      if (res.ok) {
+        renderDeadLetters(data.deadLetters);
+      }
+    } catch (err) {
+      $harnessDeadLetters.innerHTML = '<div class="trace-empty">Error loading dead letters</div>';
+    }
+  }
+
+  function renderDeadLetters(deadLetters) {
+    if (!deadLetters || deadLetters.length === 0) {
+      $harnessDeadLetters.innerHTML = '<div class="trace-empty">No dead letters.</div>';
+      return;
+    }
+
+    $harnessDeadLetters.innerHTML = "";
+    deadLetters.forEach(dl => {
+      const div = document.createElement("div");
+      div.className = "dead-letter-item";
+
+      const time = new Date(dl.timestamp).toLocaleTimeString();
+
+      div.innerHTML = `
+        <div class="dead-letter-header">
+          <span class="dead-letter-actor">${escapeHtml(dl.actor)}</span>
+          <span>${dl.runId.slice(0,8)}… step ${dl.step}</span>
+          <span style="margin-left:auto;color:var(--dim);font-size:10px">${time}</span>
+        </div>
+        <div class="dead-letter-error">${escapeHtml(dl.error || "Unknown error")}</div>
+        <div class="dead-letter-actions">
+          <button class="btn secondary" type="button" data-action="retry">Retry</button>
+        </div>
+      `;
+
+      div.querySelector('[data-action="retry"]').addEventListener("click", async () => {
+        try {
+          const res = await fetch(`${HARNESS_BASE}/dead-letter/retry`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ runId: dl.runId, step: dl.step, actor: dl.actor }),
+          });
+          if (res.ok) {
+            alert("Retry queued");
+            loadDeadLetters();
+          }
+        } catch (err) {
+          alert("Retry failed: " + err.message);
+        }
+      });
+
+      $harnessDeadLetters.appendChild(div);
+    });
+  }
+
+  $harnessRefreshDead.addEventListener("click", loadDeadLetters);
+
+  // ─── Export / Import ───────────────────────────────────────
+  const $harnessExport = document.getElementById("harness-export");
+  const $harnessImport = document.getElementById("harness-import");
+  const $harnessImportFile = document.getElementById("harness-import-file");
+
+  async function exportRun(runId) {
+    try {
+      const res = await fetch(`${HARNESS_BASE}/export/${runId}`);
+      const data = await res.json();
+      if (res.ok) {
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `run-${runId.slice(0,8)}-${Date.now()}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+      } else {
+        alert("Export failed: " + (data.error || "Unknown error"));
+      }
+    } catch (err) {
+      alert("Export error: " + err.message);
+    }
+  }
+
+  $harnessExport.addEventListener("click", () => {
+    if (currentRunId) exportRun(currentRunId);
+    else alert("No active run to export");
+  });
+
+  $harnessImport.addEventListener("click", () => {
+    $harnessImportFile.click();
+  });
+
+  $harnessImportFile.addEventListener("change", async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    try {
+      const text = await file.text();
+      const importData = JSON.parse(text);
+
+      const res = await fetch(`${HARNESS_BASE}/import`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(importData),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        alert("Imported: " + data.runId);
+        loadRuns();
+        loadDeadLetters();
+      } else {
+        alert("Import failed: " + (data.error || "Unknown error"));
+      }
+    } catch (err) {
+      alert("Import error: " + err.message);
+    }
+
+    e.target.value = "";
+  });
+
+  // ─── WebSocket for Live Updates ────────────────────────────
+  let ws = null;
+
+  function connectWebSocket() {
+    const wsUrl = `ws://${location.host.replace(/:\d+$/, ":5174")}/api/harness/ws`;
+    ws = new WebSocket(wsUrl);
+
+    ws.onopen = () => {
+      console.log("[Harness] WebSocket connected");
+    };
+
+    ws.onmessage = (event) => {
+      try {
+        const msg = JSON.parse(event.data);
+        handleWebSocketMessage(msg);
+      } catch (err) {
+        console.error("[Harness] WS message error:", err);
+      }
+    };
+
+    ws.onclose = () => {
+      console.log("[Harness] WebSocket disconnected, reconnecting in 3s…");
+      setTimeout(connectWebSocket, 3000);
+    };
+
+    ws.onerror = (err) => {
+      console.error("[Harness] WebSocket error:", err);
+    };
+  }
+
+  function handleWebSocketMessage(msg) {
+    switch (msg.type) {
+      case "enqueued":
+        if (msg.runId === currentRunId) pollTrace();
+        loadRuns();
+        break;
+      case "started":
+        if (msg.runId === currentRunId) pollTrace();
+        loadRuns();
+        break;
+      case "completed":
+        if (msg.runId === currentRunId) pollTrace();
+        loadRuns();
+        break;
+      case "failed":
+        if (msg.runId === currentRunId) pollTrace();
+        loadRuns();
+        loadDeadLetters();
+        break;
+      case "queue-empty":
+        loadRuns();
+        break;
+      case "connected":
+        console.log("[Harness] WS ready");
+        break;
+    }
+  }
+
+  // Connect WebSocket when on harness tab
+  const originalSwitchTab = switchTab;
+  switchTab = function(tab) {
+    originalSwitchTab(tab);
+    if (tab === "harness") {
+      loadRuns();
+      loadDeadLetters();
+      if (!ws || ws.readyState !== WebSocket.OPEN) {
+        connectWebSocket();
+      }
+    }
+  };
+
+  // Initial loads
+  refreshMetrics();
+  loadRuns();
+  loadDeadLetters();
+
   initAdapters();
   renderPresets();
   $sysPrompt.value = PRESETS[activePreset].system;

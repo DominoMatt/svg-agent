@@ -1,0 +1,10 @@
+{
+  "message": "Output validation failed for planner: Expected object",
+  "attempts": 2,
+  "attemptDurations": [
+    12449,
+    12649
+  ],
+  "totalDurationMs": 25098,
+  "timestamp": "2026-09-05T00:20:02.155Z"
+}

@@ -1,0 +1,25 @@
+# Routing Rules — Declarative flow control
+# Scheduler matches events to rules, enqueues next actors
+
+# Planner creates plan → fan-out to coder + researcher
+- when: plan-created
+  then: [svg-coder, researcher]
+
+# Fan-in: wait for both code and refs
+- when: [code-generated, refs-found]
+  then: svg-validator
+
+# Validator passes → done
+- when: svg-validated
+  then: []
+
+# Validator fails → route back to coder with error context
+- when: validation-failed
+  then: svg-coder
+  maxRetries: 3
+  backoff: exponential
+  injectContext: validation-failed
+
+# Refiner (if needed) → validator again
+- when: refined
+  then: svg-validator

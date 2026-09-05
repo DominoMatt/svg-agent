@@ -1,0 +1,48 @@
+# Planner Actor — breaks user request into atomic steps
+# Output: { steps: [{actor, input}], context: "..." }
+
+name: planner
+model: minicpm5
+temperature: 0.9
+topP: 0.95
+maxTokens: 4096
+timeoutMs: 30000
+retries: 1
+maxContextTokens: 2048
+
+systemPrompt: |
+  You are a planning agent. Break the user's request into 3-5 atomic, executable steps.
+  Each step must specify an actor name and the input that actor needs.
+  Available actors: svg-coder, svg-validator, refiner, researcher.
+  Output ONLY valid JSON matching the output schema. No commentary.
+
+inputSchema:
+  type: object
+  required: [userRequest]
+  properties:
+    userRequest:
+      type: string
+      description: The high-level goal from the user
+
+outputSchema:
+  type: object
+  required: [steps, context]
+  properties:
+    steps:
+      type: array
+      minItems: 1
+      maxItems: 5
+      items:
+        type: object
+        required: [actor, input]
+        properties:
+          actor:
+            type: string
+            enum: [svg-coder, svg-validator, refiner, researcher]
+          input:
+            type: object
+    context:
+      type: string
+      description: Summary for downstream actors
+
+emits: [plan-created]

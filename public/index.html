@@ -17,33 +17,96 @@
       <button id="reset" class="icon-btn" title="New conversation" aria-label="New conversation">↺</button>
     </div>
 
-    <nav class="presets">
-      <h3>Presets</h3>
-      <ul id="preset-list"></ul>
+    <!-- Tab Navigation -->
+    <nav class="sidebar-tabs" role="tablist">
+      <button id="tab-chat" class="tab-btn active" role="tab" aria-selected="true" data-tab="chat">💬 Chat</button>
+      <button id="tab-harness" class="tab-btn" role="tab" aria-selected="false" data-tab="harness">⚙️ Harness</button>
     </nav>
 
-    <footer class="foot">
-      <label class="field">
-        <span>Adapter</span>
-        <select id="adapter"></select>
-      </label>
-      <label class="field">
-        <span>Endpoint</span>
-        <input id="endpoint" spellcheck="false" />
-      </label>
-      <label class="field">
-        <span>Model</span>
-        <input id="model" spellcheck="false" />
-      </label>
-      <label class="field">
-        <span>System Prompt</span>
-        <textarea id="sysPrompt" rows="3" spellcheck="false" placeholder="Custom system prompt…"></textarea>
-      </label>
-      <div class="status-row">
-        <div id="status" class="pill neutral">connecting…</div>
-        <button id="reconnect" class="icon-btn" title="Reconnect" aria-label="Reconnect">↻</button>
+    <!-- Chat Panel -->
+    <div id="panel-chat" class="sidebar-panel active" role="tabpanel">
+      <nav class="presets">
+        <h3>Presets</h3>
+        <ul id="preset-list"></ul>
+      </nav>
+
+      <footer class="foot">
+        <label class="field">
+          <span>Adapter</span>
+          <select id="adapter"></select>
+        </label>
+        <label class="field">
+          <span>Endpoint</span>
+          <input id="endpoint" spellcheck="false" />
+        </label>
+        <label class="field">
+          <span>Model</span>
+          <input id="model" spellcheck="false" />
+        </label>
+        <label class="field">
+          <span>System Prompt</span>
+          <textarea id="sysPrompt" rows="3" spellcheck="false" placeholder="Custom system prompt…"></textarea>
+        </label>
+        <div class="status-row">
+          <div id="status" class="pill neutral">connecting…</div>
+          <button id="reconnect" class="icon-btn" title="Reconnect" aria-label="Reconnect">↻</button>
+        </div>
+      </footer>
+    </div>
+
+    <!-- Harness Panel -->
+    <div id="panel-harness" class="sidebar-panel" role="tabpanel" hidden>
+      <div class="harness-section">
+        <h3>Run Pipeline</h3>
+        <label class="field">
+          <span>Goal</span>
+          <textarea id="harness-goal" rows="3" spellcheck="false" placeholder="Describe the task (e.g., 'Create a rotating 3D cube in SVG')"></textarea>
+        </label>
+        <button id="harness-start" class="btn primary" type="button">▶ Start Run</button>
+        <div id="harness-run-info" class="run-info hidden">
+          <span class="run-id">Run: <code id="harness-run-id"></code></span>
+          <button id="harness-stop" class="btn secondary" type="button">⏹ Stop</button>
+        </div>
       </div>
-    </footer>
+
+      <div class="harness-section">
+        <h3>Trace</h3>
+        <div id="harness-trace" class="trace-container">
+          <div class="trace-empty">No active run. Start a pipeline to see trace.</div>
+        </div>
+      </div>
+
+      <div class="harness-section">
+        <h3>Run History</h3>
+        <button id="harness-refresh-runs" class="btn secondary" type="button" style="margin-bottom:8px">↻ Refresh</button>
+        <div id="harness-runs" class="runs-list">
+          <div class="trace-empty">No runs yet.</div>
+        </div>
+      </div>
+
+      <div class="harness-section">
+        <h3>Dead Letters</h3>
+        <button id="harness-refresh-dead" class="btn secondary" type="button" style="margin-bottom:8px">↻ Refresh</button>
+        <div id="harness-dead-letters" class="dead-letters-list">
+          <div class="trace-empty">No dead letters.</div>
+        </div>
+      </div>
+
+      <div class="harness-section">
+        <h3>Import / Export</h3>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button id="harness-export" class="btn secondary" type="button">⬇ Export Current Run</button>
+          <input id="harness-import-file" type="file" accept=".json" style="display:none" />
+          <button id="harness-import" class="btn secondary" type="button">⬆ Import Run</button>
+        </div>
+      </div>
+
+      <div class="harness-section">
+        <h3>Metrics</h3>
+        <button id="harness-refresh-metrics" class="btn secondary" type="button">↻ Refresh</button>
+        <pre id="harness-metrics" class="metrics-display">No data</pre>
+      </div>
+    </div>
   </aside>
 
   <!-- ══ Stage ═════════════════════════════════ -->

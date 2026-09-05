@@ -1,0 +1,10 @@
+{
+  "message": "fetch failed",
+  "attempts": 2,
+  "attemptDurations": [
+    22,
+    2
+  ],
+  "totalDurationMs": 24,
+  "timestamp": "2026-09-04T23:39:03.983Z"
+}
