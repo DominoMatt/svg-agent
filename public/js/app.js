@@ -979,7 +979,11 @@
         loadRuns();
         break;
       case "completed":
-        if (msg.runId === currentRunId) pollTrace();
+        if (msg.runId === currentRunId) {
+          // Immediately render the completed step's output
+          renderCompletedStep(msg);
+          pollTrace();
+        }
         loadRuns();
         break;
       case "failed":
@@ -994,6 +998,56 @@
         console.log("[Harness] WS ready");
         break;
     }
+  }
+
+  // Render a completed step immediately in the chat view
+  async function renderCompletedStep(msg) {
+    const { runId, step, actor, duration, result } = msg;
+    if (!result || !result.outputCid) return;
+
+    // Find or create the agent pill
+    let pill = $harnessChat.querySelector(`.agent-pill[data-step="${step}"]`);
+    if (!pill) {
+      pill = document.createElement("div");
+      pill.className = "agent-pill";
+      pill.dataset.step = step;
+      pill.innerHTML = `
+        <span class="agent-name">${escapeHtml(actor)}</span>
+        <span class="pill ok">✓ ${escapeHtml(result.eventTypes?.[0] || "completed")}</span>
+      `;
+      $harnessChat.appendChild(pill);
+    } else {
+      pill.classList.remove("thinking");
+      pill.innerHTML = `
+        <span class="agent-name">${escapeHtml(actor)}</span>
+        <span class="pill ok">✓ ${escapeHtml(result.eventTypes?.[0] || "completed")}</span>
+      `;
+    }
+
+    // Create message container for output
+    let msgDiv = $harnessChat.querySelector(`.chat-message[data-step="${step}"]`);
+    if (!msgDiv) {
+      msgDiv = document.createElement("div");
+      msgDiv.className = "chat-message agent";
+      msgDiv.dataset.step = step;
+      const durationStr = duration ? duration + "ms" : "";
+      const tokens = result.tokensEstimated ? result.tokensEstimated.toLocaleString() + " tokens" : "";
+      msgDiv.innerHTML = `
+        <div class="chat-message-header">
+          <span class="agent-badge">${escapeHtml(actor)}</span>
+          <span>${durationStr}</span>
+          <span>${tokens}</span>
+        </div>
+        <div class="chat-message-content" data-cid="${result.outputCid}"></div>
+      `;
+      $harnessChat.appendChild(msgDiv);
+    }
+
+    // Fetch and render blob content
+    const container = msgDiv.querySelector(".chat-message-content");
+    await fetchBlobForChat(result.outputCid, container);
+
+    $harnessChat.scrollTop = $harnessChat.scrollHeight;
   }
 
   // Connect WebSocket when on harness tab
