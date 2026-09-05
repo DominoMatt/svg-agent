@@ -19,11 +19,11 @@ svg-agent/
 │   ├── manifest.mjs          # NEW: YAML manifest loader + validator
 │   ├── modelRegistry.mjs     # NEW: model registry loader
 │   └── registry/             # NEW: actor manifests (YAML)
-│       ├── planner.yaml
+│       ├── svg-planner.yaml
 │       ├── svg-coder.yaml
 │       ├── svg-validator.yaml
-│       ├── refiner.yaml
-│       ├── researcher.yaml
+│       ├── svg-refiner.yaml
+│       ├── svg-researcher.yaml
 │       └── routes.yaml
 ├── actors/                   # NEW: generic runner (no per-actor code)
 │   └── runner.mjs
@@ -95,10 +95,10 @@ POST /api/harness/replay/:runId/:step
 POST /api/harness/start { goal: "..." }
     │
     ▼
-Enqueue planner (step 1)
+Enqueue svg-planner (step 1)
     │
     ▼
-Runner loads planner manifest
+Runner loads svg-planner manifest
     │
     ▼
 Validates input ✓
@@ -107,7 +107,7 @@ Validates input ✓
 Calls Ollama (fails - not running)
     │
     ▼
-Emits planner-failed event with CID
+Emits svg-planner-failed event with CID
     │
     ▼
 Log + blobs persisted
@@ -234,7 +234,7 @@ ollama serve
 Then in the Harness tab:
 1. Enter goal: *"Create a rotating 3D cube in SVG"*
 2. Click "▶ Start Run"
-3. Watch live trace as planner → coder → validator → refiner execute
+3. Watch live trace as svg-planner → svg-coder → svg-validator → svg-refiner execute
 4. Click any step → "View Output" to see generated SVG
 5. Click "Replay from Here" to re-run from any step
 6. Use "Run History" to load past runs
@@ -265,24 +265,24 @@ Then in the Harness tab:
 ### Actor Configuration (All using minicpm5)
 | Actor | Temperature | Top-P | Max Tokens | Timeout |
 |-------|-------------|-------|------------|---------|
-| planner | 0.9 (think) | 0.95 | 4096 | 30s |
+| svg-planner | 0.9 (think) | 0.95 | 4096 | 30s |
 | svg-coder | 0.7 (no-think) | 0.95 | 4096 | 20s |
 | svg-validator | 0.7 (no-think) | 0.95 | 2048 | 15s |
-| refiner | 0.7 (no-think) | 0.95 | 4096 | 20s |
-| researcher | 0.9 (think) | 0.95 | 4096 | 30s |
+| svg-refiner | 0.7 (no-think) | 0.95 | 4096 | 20s |
+| svg-researcher | 0.9 (think) | 0.95 | 4096 | 30s |
 
 ### Last Test Run
 - **Goal**: "Create a simple SVG circle with radius 50"
-- **Result**: Planner timed out after 30s (2 attempts × 15s each)
-- **Issue**: Planner output validation failed - model not returning valid JSON within timeout
-- **Log**: Run `410b8b93-65ca-424a-9b3c-e8891508336c` shows planner-failed with timeout
+- **Result**: svg-planner timed out after 30s (2 attempts × 15s each)
+- **Issue**: svg-planner output validation failed - model not returning valid JSON within timeout
+- **Log**: Run `410b8b93-65ca-424a-9b3c-e8891508336c` shows svg-planner-failed with timeout
 
 ### Next Steps for Testing
-1. **Increase planner timeout** further (60s) or reduce complexity
-2. **Adjust planner prompt** to be more explicit about JSON-only output
+1. **Increase svg-planner timeout** further (60s) or reduce complexity
+2. **Adjust svg-planner prompt** to be more explicit about JSON-only output
 3. **Test with simpler goal** first (e.g., "Draw a red square")
 4. **Check Ollama logs** for token generation rate (~19 tokens/sec observed)
-5. **Consider reducing maxTokens** for planner to speed up generation
+5. **Consider reducing maxTokens** for svg-planner to speed up generation
 
 ### Commands to Resume Testing
 ```bash
@@ -309,8 +309,8 @@ curl http://localhost:5174/api/harness/log/<runId>
 
 ### Actor Manifest (YAML in `server/registry/`)
 ```yaml
-# planner.yaml
-name: planner
+# svg-planner.yaml
+name: svg-planner
 model: minicpm5          # resolves via models.yaml
 temperature: 0.2
 maxTokens: 1024
@@ -390,9 +390,9 @@ models:
 ## 4. Routing Rules (Declarative, in `server/registry/routes.yaml`)
 
 ```yaml
-# Fan-out: planner → coder + researcher
+# Fan-out: svg-planner → svg-coder + svg-researcher
 - when: plan-created
-  then: [coder, researcher]
+  then: [svg-coder, svg-researcher]
 
 # Fan-in: wait for both code + refs
 - when: [code-generated, refs-found]
@@ -433,7 +433,7 @@ function schedule(newEvent) {
 
 | Endpoint | Purpose |
 |----------|---------|
-| `POST /api/harness/start` | Create runId, enqueue first actor (planner) |
+| `POST /api/harness/start` | Create runId, enqueue first actor (svg-planner) |
 | `POST /api/harness/enqueue` | Manual envelope enqueue (debug/replay) |
 | `GET /api/harness/trace/:runId` | Full DAG visualization data |
 | `GET /api/harness/log/:runId` | Raw event log |
@@ -458,10 +458,10 @@ Add to `public/js/app.js`:
 ```yaml
 # Actors needed (manifests in server/registry/)
 actors:
-  - planner          # minicpm5: breaks request → steps
+  - svg-planner      # minicpm5: breaks request → steps
   - svg-coder        # qwen2.5-coder:1.5b: writes SVG
   - svg-validator    # smollm2-1.7b: checks SVG validity
-  - refiner          # minicpm5: fixes issues
+  - svg-refiner      # minicpm5: fixes issues
 ```
 
 **Flow:**
@@ -469,19 +469,19 @@ actors:
 User: "3D rotating cube in SVG"
     │
     ▼
-[planner:minicpm5] → plan-created (steps: [coder, validator])
+[svg-planner:minicpm5] → plan-created (steps: [svg-coder, svg-validator])
     │
     ├──────────────────┐
     ▼                  ▼
-[coder:qwen]       [validator:smollm2]  (parallel)
+[svg-coder:qwen]   [svg-validator:smollm2]  (parallel)
     │                  │
     │ code-generated   │ (waits for code)
     └────────┬─────────┘
              ▼
       [integration:minicpm5] → svg-ready / validation-failed
              │
-             ▼ (if failed, routes back to coder with error context)
-      [refiner:minicpm5] → svg-ready
+             ▼ (if failed, routes back to svg-coder with error context)
+      [svg-refiner:minicpm5] → svg-ready
 ```
 
 Each actor = **one short conversation** (1–2 turns). Context pulled by CID.

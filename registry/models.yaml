@@ -6,6 +6,7 @@ models:
     endpoint: "http://127.0.0.1:11434"
     modelTag: "openbmb/minicpm5:latest"
     contextWindow: 4096
+    think: false
     strengths: [planning, coding, reasoning, general]
     defaultTemperature: 0.2
     defaultMaxTokens: 2048

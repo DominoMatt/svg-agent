@@ -45,6 +45,8 @@ function parseYaml(content) {
   const result = {};
   let currentKey = null;
   let currentArray = null;
+  let multilineKey = null;
+  let multilineIndent = -1;
   let indentStack = [{ obj: result, indent: -1 }];
 
   for (const rawLine of lines) {
@@ -53,6 +55,20 @@ function parseYaml(content) {
 
     const indent = line.search(/\S/);
     const trimmed = line.trim();
+
+    // Continuation of a multi-line string block (|) — colons inside are literal
+    if (multilineKey && indent > multilineIndent) {
+      const parent = indentStack[indentStack.length - 1].obj;
+      if (typeof parent[multilineKey] === "string") {
+        parent[multilineKey] += "\n" + trimmed;
+      }
+      continue;
+    }
+    // End of multi-line block
+    if (multilineKey && indent <= multilineIndent) {
+      multilineKey = null;
+      multilineIndent = -1;
+    }
 
     // Handle array items
     if (trimmed.startsWith("- ")) {
@@ -82,7 +98,8 @@ function parseYaml(content) {
         parent[key] = value === "|" ? "" : {};
         if (value === "|") {
           // Next lines with higher indent are the string content
-          // This is a simplification - real YAML is more complex
+          multilineKey = key;
+          multilineIndent = indent;
         } else if (typeof parent[key] === "object") {
           indentStack.push({ obj: parent[key], indent: indent });
         }

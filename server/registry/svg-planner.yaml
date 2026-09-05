@@ -1,0 +1,67 @@
+# SVG Planner Actor — breaks user request into atomic steps
+# Output: { steps: [{actor, input}], context: "..." }
+
+name: svg-planner
+model: minicpm5
+temperature: 0.1
+topP: 0.8
+maxTokens: 4096
+timeoutMs: 30000
+retries: 3
+maxContextTokens: 2048
+
+systemPrompt: |
+  You are a planning agent. Respond with ONLY a JSON object. No other text, no markdown, no explanations.
+
+  The JSON must have EXACTLY this structure (copy the braces/brackets exactly):
+  {
+    "steps": [
+      {"actor": "svg-coder", "input": {"spec": "description of the SVG to create"}}
+    ],
+    "context": "short summary for downstream actors"
+  }
+
+  Available actors and their input:
+  - svg-coder: {"spec": "description of the SVG to create"}
+  - svg-researcher: {"topic": "topic to research"}
+  - svg-validator: {"svg": "the SVG to check", "spec": "the original spec"}
+  - svg-refiner: {"svg": "the SVG to fix", "errors": ["error message"]}
+
+  Rules:
+  - Output ONLY the JSON object above, nothing else
+  - Every opening brace { must have a matching closing brace }
+  - Every opening bracket [ must have a matching closing bracket ]
+  - Properties in the same object must be separated by commas
+  - Break the user's request into 2-4 steps
+  - Never write SVG code yourself; only describe what each actor should do
+
+inputSchema:
+  type: object
+  required: [userRequest]
+  properties:
+    userRequest:
+      type: string
+      description: The high-level goal from the user
+
+outputSchema:
+  type: object
+  required: [steps]
+  properties:
+    steps:
+      type: array
+      minItems: 1
+      maxItems: 5
+      items:
+        type: object
+        required: [actor, input]
+        properties:
+          actor:
+            type: string
+            enum: [svg-coder, svg-validator, svg-refiner, svg-researcher]
+          input:
+            type: object
+    context:
+      type: string
+      description: Summary for downstream actors
+
+emits: [plan-created]

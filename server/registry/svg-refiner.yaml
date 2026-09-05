@@ -1,0 +1,45 @@
+# SVG Refiner Actor — fixes SVG based on validation errors
+# Input: { svg: string, errors: string[], spec?: string }
+# Output: { svg: string, fixes: string[] }
+
+name: svg-refiner
+model: minicpm5
+temperature: 0.7
+topP: 0.95
+maxTokens: 4096
+timeoutMs: 20000
+retries: 1
+maxContextTokens: 4096
+
+systemPrompt: |
+  You are an SVG fixer. Given an SVG and validation errors, produce a corrected SVG.
+  Output ONLY JSON: { "svg": "<svg>...</svg>", "fixes": ["fixed X", "fixed Y"] }
+  Preserve the original design intent. Make minimal changes.
+
+inputSchema:
+  type: object
+  required: [svg, errors]
+  properties:
+    svg:
+      type: string
+      pattern: "^<svg"
+    errors:
+      type: array
+      items:
+        type: string
+    spec:
+      type: string
+
+outputSchema:
+  type: object
+  required: [svg, fixes]
+  properties:
+    svg:
+      type: string
+      pattern: "^<svg"
+    fixes:
+      type: array
+      items:
+        type: string
+
+emits: [refined]

@@ -205,7 +205,7 @@ async function processQueue() {
       broadcast({ type: "completed", runId: envelope.runId, step: envelope.step, actor: envelope.actor, duration, result });
 
       // After successful run, check routing rules
-      await checkRoutingRules(envelope);
+      await checkRoutingRules(envelope, result.eventTypes || []);
     } catch (err) {
       const duration = Date.now() - stepStart;
       metrics.totalErrors++;
@@ -225,13 +225,15 @@ async function processQueue() {
   broadcast({ type: "queue-empty" });
 }
 
-async function checkRoutingRules(completedEnvelope) {
+async function checkRoutingRules(completedEnvelope, emittedEventTypes = []) {
   const runId = completedEnvelope.runId;
-  const eventType = completedEnvelope.actor; // actor name maps to event type
 
   for (const rule of routingRules) {
     const whenTypes = Array.isArray(rule.when) ? rule.when : [rule.when];
-    const triggered = whenTypes.includes(eventType);
+    // Match on the event types the actor actually emitted (manifest.emits),
+    // NOT the actor name — routes.yaml rules are keyed on event types
+    // (e.g. `plan-created`, not `svg-planner`).
+    const triggered = whenTypes.some(t => emittedEventTypes.includes(t));
 
     if (!triggered) continue;
 
@@ -244,6 +246,16 @@ async function checkRoutingRules(completedEnvelope) {
     // Enqueue next actors
     for (const nextActor of rule.then) {
       const nextStep = completedEnvelope.step + 1;
+      // Dedup: don't enqueue the same actor for the same parent step twice
+      // (e.g. a fan-in rule fires once per completing branch).
+      if (await alreadyEnqueued(runId, nextActor, completedEnvelope.step)) continue;
+
+      // Only enqueue if the plan has a step for this actor
+      if (!(await planHasStep(runId, nextActor))) {
+        console.log(`[${runId.slice(0,8)}] Skipping ${nextActor} — no step in plan`);
+        continue;
+      }
+
       const payload = await buildPayloadForActor(runId, nextActor, rule);
       const contextRefs = await buildContextRefs(runId, rule);
 
@@ -261,12 +273,56 @@ async function checkRoutingRules(completedEnvelope) {
   }
 }
 
+// True if an envelope for (runId, actor, parentStep) was already enqueued
+async function alreadyEnqueued(runId, actor, parentStep) {
+  const events = await getEventsByRunId(runId);
+  return events.some(e => e.eventType === "enqueued" && e.actor === actor && e.parentStep === parentStep);
+}
+
+// True if the plan for this run has a step for the given actor
+async function planHasStep(runId, actorName) {
+  const events = await getEventsByRunId(runId);
+  const planEvent = events.reverse().find(e => e.eventType === "plan-created");
+  if (!planEvent || !planEvent.payloadRef) return false;
+  const { getBlob } = await import("./blobs.mjs");
+  const content = await getBlob(planEvent.payloadRef);
+  if (!content) return false;
+  try {
+    const plan = JSON.parse(content);
+    return plan.steps?.some(s => s.actor === actorName) ?? false;
+  } catch {
+    return false;
+  }
+}
+
 async function buildPayloadForActor(runId, actorName, rule) {
   // Get the latest relevant event payloads
   const events = await getEventsByRunId(runId);
+  const { getBlob } = await import("./blobs.mjs");
+
+  // If a plan exists, extract the step input for the target actor.
+  // The svg-planner emits { steps: [{actor, input}], context } — downstream
+  // actors expect their own input schema (e.g. svg-coder needs {spec}).
+  const planEvent = events.reverse().find(e => e.eventType === "plan-created");
+  if (planEvent && planEvent.payloadRef) {
+    const content = await getBlob(planEvent.payloadRef);
+    if (content) {
+      try {
+        const plan = JSON.parse(content);
+        if (plan && Array.isArray(plan.steps)) {
+          const step = plan.steps.find(s => s.actor === actorName);
+          if (step && step.input) return step.input;
+        }
+        return plan;
+      } catch {
+        return { raw: content };
+      }
+    }
+  }
+
+  // Fallback: latest event with a payloadRef
   const latest = events.reverse().find(e => e.payloadRef);
   if (latest && latest.payloadRef) {
-    const { getBlob } = await import("./blobs.mjs");
     const content = await getBlob(latest.payloadRef);
     if (content) {
       try {
@@ -316,11 +372,11 @@ async function handleRequest(req, res) {
         const { goal } = JSON.parse(body);
         const runId = randomUUID();
 
-        // Enqueue planner as first step
+        // Enqueue svg-planner as first step
         await enqueue({
           runId,
           step: 1,
-          actor: "planner",
+          actor: "svg-planner",
           payload: { userRequest: goal },
           contextRefs: [],
           deadline: Date.now() + 60000,

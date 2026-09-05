@@ -50,12 +50,12 @@ async function testTrace() {
 }
 
 async function testPlanner() {
-  console.log("\n🧪 Testing planner actor (requires Ollama)...");
+  console.log("\n🧪 Testing svg-planner actor (requires Ollama)...");
   try {
-    const result = await runActorWithRetry("planner", {
+    const result = await runActorWithRetry("svg-planner", {
       runId: TEST_RUN_ID,
       step: 2,
-      actor: "planner",
+      actor: "svg-planner",
       payload: { userRequest: "Create a simple SVG circle" },
       contextRefs: [],
       deadline: Date.now() + 60000,
@@ -63,9 +63,9 @@ async function testPlanner() {
       retries: 0
     });
     console.log(`  Planner output: ${JSON.stringify(result.output).slice(0, 200)}...`);
-    console.log("  ✓ Planner works");
+    console.log("  ✓ svg-planner works");
   } catch (err) {
-    console.log(`  ⚠ Planner test skipped (Ollama not available): ${err.message}`);
+    console.log(`  ⚠ svg-planner test skipped (Ollama not available): ${err.message}`);
   }
 }
 

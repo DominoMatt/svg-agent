@@ -59,7 +59,7 @@ export async function runActor(actorName, envelope) {
   const messages = buildMessages(manifest, context, envelope.payload);
 
   // Call Ollama (with streaming support for long outputs)
-  const response = await callOllama(endpoint, modelTag, messages, manifest);
+  const response = await callOllama(endpoint, modelTag, messages, manifest, modelInfo);
 
   // Validate output
   let parsedOutput;
@@ -72,7 +72,9 @@ export async function runActor(actorName, envelope) {
 
   const outputValidation = validateOutput(manifest, parsedOutput);
   if (!outputValidation.valid) {
-    throw new Error(`Output validation failed for ${actorName}: ${outputValidation.error}`);
+    const err = new Error(`Output validation failed for ${actorName}: ${outputValidation.error}`);
+    err.rawOutput = response;
+    throw err;
   }
 
   // Store output blob
@@ -135,11 +137,213 @@ function estimateTokens(text) {
   return Math.ceil(text.length / 4);
 }
 
-async function callOllama(endpoint, modelTag, messages, manifest) {
+/**
+ * Decide whether a `"` inside a string is a real terminator or a literal
+ * quote (e.g. unescaped quotes in HTML/SVG markup like width="100").
+ * A quote is a terminator if followed (past whitespace) by a JSON
+ * structural char: , } ] : or end of input.
+ */
+function isQuoteTerminator(text, i) {
+  let j = i + 1;
+  while (j < text.length && /\s/.test(text[j])) j++;
+  if (j >= text.length) return true;
+  const ch = text[j];
+  return ch === "," || ch === "}" || ch === "]" || ch === ":";
+}
+
+/**
+ * Escape literal double quotes that appear inside JSON string values
+ * (unescaped quotes from small models embedding markup like SVG).
+ */
+function escapeUnescapedQuotes(text) {
+  let out = "";
+  let inString = false;
+  let escaped = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (inString) {
+      if (escaped) { out += ch; escaped = false; continue; }
+      if (ch === "\\") { out += ch; escaped = true; continue; }
+      if (ch === '"') {
+        if (isQuoteTerminator(text, i)) { out += ch; inString = false; }
+        else { out += '\\"'; }
+        continue;
+      }
+      out += ch;
+      continue;
+    }
+    if (ch === '"') { out += ch; inString = true; continue; }
+    out += ch;
+  }
+  return out;
+}
+
+/**
+ * Extract the first balanced JSON block ({...} or [...]) from text.
+ * Handles thinking-model output where the answer is embedded in reasoning.
+ * Falls back to best-effort repair for slightly malformed JSON.
+ */
+function extractJson(text) {
+  if (!text) return null;
+  // Strip markdown code fences (```json ... ``` or ``` ... ```)
+  const fenceMatch = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+  if (fenceMatch) {
+    text = fenceMatch[1].trim();
+  }
+  // Direct parse first
+  try {
+    return JSON.parse(text);
+  } catch {}
+  // Find first JSON block
+  const startIdx = text.search(/[\[{]/);
+  if (startIdx === -1) return null;
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+  for (let i = startIdx; i < text.length; i++) {
+    const ch = text[i];
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (ch === "\\") escaped = true;
+      else if (ch === '"' && isQuoteTerminator(text, i)) inString = false;
+      continue;
+    }
+    if (ch === '"') inString = true;
+    else if (ch === "{" || ch === "[") depth++;
+    else if (ch === "}" || ch === "]") {
+      depth--;
+      if (depth === 0) {
+        const candidate = text.slice(startIdx, i + 1);
+        try {
+          return JSON.parse(candidate);
+        } catch {
+          // Try repairing unescaped quotes inside string values
+          try {
+            return JSON.parse(escapeUnescapedQuotes(candidate));
+          } catch {
+            return null;
+          }
+        }
+      }
+    }
+  }
+  // Unbalanced JSON — attempt best-effort repair
+  return repairJson(text.slice(startIdx));
+}
+
+/**
+ * Fix missing commas between object properties (e.g., `...}] "key":` → `...}], "key":`).
+ * Only inserts commas where structurally valid: after `}` or `]` followed by a property key.
+ */
+function fixMissingCommas(text) {
+  let out = "";
+  let inString = false;
+  let escaped = false;
+  let depth = 0;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    out += ch;
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (ch === "\\") escaped = true;
+      else if (ch === '"') inString = false;
+      continue;
+    }
+    if (ch === '"') { inString = true; continue; }
+    if (ch === "{" || ch === "[") { depth++; continue; }
+    if (ch === "}" || ch === "]") {
+      depth--;
+      // Look ahead for next non-whitespace char
+      let j = i + 1;
+      while (j < text.length && /\s/.test(text[j])) j++;
+      if (j < text.length && text[j] === '"') {
+        // Next token is a property key — insert comma if not already there
+        const prevNonWs = out.trimEnd().slice(-1);
+        if (prevNonWs !== "," && prevNonWs !== "{" && prevNonWs !== "[") {
+          out += ",";
+        }
+      }
+      continue;
+    }
+  }
+  return out;
+}
+
+/**
+ * Best-effort repair for slightly malformed JSON: trims trailing garbage
+ * and appends missing closing brackets. Bails out on mismatched closers.
+ */
+function repairJson(raw) {
+  const lastClose = Math.max(raw.lastIndexOf("}"), raw.lastIndexOf("]"));
+  if (lastClose === -1) return null;
+  let candidate = raw.slice(0, lastClose + 1);
+  // Fix missing commas between object properties
+  candidate = fixMissingCommas(candidate);
+  const stack = [];
+  let inString = false;
+  let escaped = false;
+  for (let i = 0; i < candidate.length; i++) {
+    const ch = candidate[i];
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (ch === "\\") escaped = true;
+      else if (ch === '"' && isQuoteTerminator(candidate, i)) inString = false;
+      continue;
+    }
+    if (ch === '"') inString = true;
+    else if (ch === "{" || ch === "[") stack.push(ch);
+    else if (ch === "}" || ch === "]") {
+      const open = stack.pop();
+      if ((ch === "}" && open !== "{") || (ch === "]" && open !== "[")) return null;
+    }
+  }
+  for (let i = stack.length - 1; i >= 0; i--) {
+    candidate += stack[i] === "{" ? "}" : "]";
+  }
+  try {
+    return JSON.parse(candidate);
+  } catch {
+    try {
+      return JSON.parse(escapeUnescapedQuotes(candidate));
+    } catch {
+      return null;
+    }
+  }
+}
+
+/**
+ * Extract usable output from an Ollama chat response.
+ * Falls back to the `thinking` field for thinking models (e.g. minicpm5)
+ * that emit reasoning but leave `content` empty.
+ */
+export function extractModelOutput(data) {
+  const content = data?.message?.content || "";
+  if (content.trim()) {
+    // Direct parse; if wrapped (e.g. ```json fences), extract the JSON block
+    try {
+      JSON.parse(content);
+      return content;
+    } catch {
+      const extracted = extractJson(content);
+      if (extracted !== null) return JSON.stringify(extracted);
+      return content;
+    }
+  }
+  const thinking = data?.message?.thinking || "";
+  if (thinking.trim()) {
+    const extracted = extractJson(thinking);
+    if (extracted !== null) return JSON.stringify(extracted);
+    return thinking;
+  }
+  return "";
+}
+
+async function callOllama(endpoint, modelTag, messages, manifest, modelInfo) {
   const body = {
     model: modelTag,
     messages,
     stream: false,
+    think: manifest.think ?? modelInfo?.think ?? false,
     options: {
       temperature: manifest.temperature ?? 0.2,
       top_p: manifest.topP ?? 0.9,
@@ -166,7 +370,7 @@ async function callOllama(endpoint, modelTag, messages, manifest) {
     }
 
     const data = await response.json();
-    return data.message?.content || "";
+    return extractModelOutput(data);
   } catch (err) {
     clearTimeout(timeoutId);
     if (err.name === "AbortError") {
@@ -211,6 +415,7 @@ export async function runActorWithRetry(actorName, envelope) {
     attempts: maxRetries + 1,
     attemptDurations: attemptStartTimes,
     totalDurationMs: attemptStartTimes.reduce((a, b) => a + b, 0),
+    rawOutput: lastError.rawOutput ? String(lastError.rawOutput).slice(0, 2000) : undefined,
     timestamp: new Date().toISOString()
   }, null, 2));
 
@@ -258,6 +463,7 @@ export async function runActorStreaming(actorName, envelope, onToken) {
     model: modelTag,
     messages,
     stream: true,
+    think: manifest.think ?? modelInfo.think ?? false,
     options: {
       temperature: manifest.temperature ?? 0.2,
       top_p: manifest.topP ?? 0.9,
@@ -280,6 +486,7 @@ export async function runActorStreaming(actorName, envelope, onToken) {
   const decoder = new TextDecoder();
   let buffer = "";
   let fullContent = "";
+  let fullThinking = "";
 
   while (true) {
     const { done, value } = await reader.read();
@@ -295,13 +502,22 @@ export async function runActorStreaming(actorName, envelope, onToken) {
           fullContent += obj.message.content;
           onToken(obj.message.content);
         }
+        if (obj.message?.thinking) {
+          fullThinking += obj.message.thinking;
+        }
         if (obj.done) {
+          // Fall back to thinking for thinking models (content may be empty)
+          let output = fullContent;
+          if (!output.trim() && fullThinking.trim()) {
+            const extracted = extractJson(fullThinking);
+            output = extracted !== null ? JSON.stringify(extracted) : fullThinking;
+          }
           // Validate and store final output
           let parsedOutput;
           try {
-            parsedOutput = JSON.parse(fullContent);
+            parsedOutput = JSON.parse(output);
           } catch {
-            parsedOutput = fullContent;
+            parsedOutput = output;
           }
           const outputValidation = validateOutput(manifest, parsedOutput);
           if (!outputValidation.valid) {

@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 const PORT = Number(process.env.PORT) || 5173;
 const OLLAMA_BASE = process.env.OLLAMA_BASE || "http://127.0.0.1:11434";
 const STUDIO_BASE = process.env.STUDIO_BASE || "http://127.0.0.1:3000";
+const HARNESS_BASE = process.env.HARNESS_BASE || "http://127.0.0.1:5174";
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
 const PUBLIC = join(__dirname, "..", "public");
@@ -115,6 +116,11 @@ const server = createServer(async (req, res) => {
   if (req.url.startsWith("/api/studio/")) {
     req.url = req.url.replace("/api/studio", "");
     return proxy(STUDIO_BASE, req, res);
+  }
+
+  // Proxy: /api/harness/* -> Harness API
+  if (req.url.startsWith("/api/harness/")) {
+    return proxy(HARNESS_BASE, req, res);
   }
 
   // Default: proxy to Ollama for any /api/* (convenience alias)
