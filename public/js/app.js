@@ -433,6 +433,7 @@
   const $harnessRunInfo = document.getElementById("harness-run-info");
   const $harnessRunId = document.getElementById("harness-run-id");
   const $harnessTrace = document.getElementById("harness-trace");
+  const $harnessChat = document.getElementById("harness-chat-view")?.querySelector("#harness-chat");
   const $harnessMetrics = document.getElementById("harness-metrics");
   const $harnessRefreshMetrics = document.getElementById("harness-refresh-metrics");
 
@@ -447,6 +448,20 @@
     $panelHarness.classList.toggle("active", isHarness);
     $panelChat.hidden = isHarness;
     $panelHarness.hidden = !isHarness;
+
+    // Show/hide main stage views
+    const $history = document.getElementById("history");
+    const $harnessChatView = document.getElementById("harness-chat-view");
+    const $composer = document.getElementById("composer");
+    if (isHarness) {
+      $history.hidden = true;
+      $harnessChatView.hidden = false;
+      $composer.hidden = true;
+    } else {
+      $history.hidden = false;
+      $harnessChatView.hidden = true;
+      $composer.hidden = false;
+    }
   }
 
   $tabChat.addEventListener("click", () => switchTab("chat"));
@@ -511,6 +526,7 @@
       const data = await res.json();
       if (res.ok) {
         renderTrace(data.trace);
+        renderChat(data.trace);
       }
     } catch (err) {
       console.error("Trace poll error:", err);
@@ -596,6 +612,84 @@
     });
 
     $harnessTrace.scrollTop = $harnessTrace.scrollHeight;
+  }
+
+  // Render chat view
+  function renderChat(trace) {
+    if (!trace || trace.length === 0) {
+      $harnessChat.innerHTML = '<div class="chat-empty">No active run. Start a pipeline to see chat.</div>';
+      return;
+    }
+
+    console.log("[Harness] renderChat called with trace:", trace);
+
+    $harnessChat.innerHTML = "";
+    trace.forEach(step => {
+      const statusClass = step.status === "ok" ? "ok" : step.status === "error" ? "error" : "pending";
+      const isThinking = step.status === "pending" || step.status === "running";
+
+      // Agent thinking pill
+      const pill = document.createElement("div");
+      pill.className = `agent-pill ${isThinking ? "thinking" : ""}`;
+      pill.innerHTML = `
+        ${isThinking ? '<span class="spinner"></span>' : ''}
+        <span class="agent-name">${escapeHtml(step.actor)}</span>
+        <span class="pill ${statusClass}">${step.status === "ok" ? "✓" : step.status === "error" ? "✗" : "⟳"} ${escapeHtml(step.eventType || step.status)}</span>
+      `;
+      $harnessChat.appendChild(pill);
+
+      // Output message if completed
+      if (step.status === "ok" && step.payloadRef) {
+        const msg = document.createElement("div");
+        msg.className = "chat-message agent";
+        const duration = step.metadata?.durationMs ? step.metadata.durationMs + "ms" : "";
+        const tokens = step.metadata?.tokensEstimated ? step.metadata.tokensEstimated.toLocaleString() + " tokens" : "";
+        msg.innerHTML = `
+          <div class="chat-message-header">
+            <span class="agent-badge">${escapeHtml(step.actor)}</span>
+            <span>${duration}</span>
+            <span>${tokens}</span>
+          </div>
+          <div class="chat-message-content" data-cid="${step.payloadRef}"></div>
+        `;
+        $harnessChat.appendChild(msg);
+
+        // Fetch and render blob content
+        fetchBlobForChat(step.payloadRef, msg.querySelector(".chat-message-content"));
+      }
+    });
+
+    $harnessChat.scrollTop = $harnessChat.scrollHeight;
+  }
+
+  // Fetch and render blob content in chat
+  async function fetchBlobForChat(cid, container) {
+    try {
+      const res = await fetch(`${HARNESS_BASE}/blob/${cid}`);
+      const data = await res.json();
+      if (res.ok && data.content) {
+        try {
+          const parsed = JSON.parse(data.content);
+          if (parsed.svg) {
+            // SVG output - render preview
+            container.innerHTML = `
+              <pre><code>${escapeHtml(JSON.stringify(parsed, null, 2))}</code></pre>
+              <div class="chat-svg-preview">${parsed.svg}</div>
+            `;
+          } else {
+            // JSON output
+            container.innerHTML = `<pre><code>${escapeHtml(JSON.stringify(parsed, null, 2))}</code></pre>`;
+          }
+        } catch {
+          // Plain text
+          container.textContent = data.content;
+        }
+      } else {
+        container.textContent = "Failed to load output";
+      }
+    } catch (err) {
+      container.textContent = "Error: " + err.message;
+    }
   }
 
   // View blob content

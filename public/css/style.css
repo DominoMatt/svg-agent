@@ -183,3 +183,43 @@ button{font:inherit;color:inherit}
 
 /* -- SVG Preview -- */
 .svg-preview{width:100%;max-width:400px;border:1px solid var(--hair);border-radius:6px;background:var(--bg)}
+
+/* -- View Toggle -- */
+.view-toggle{display:flex;gap:4px;border-bottom:1px solid var(--hair);padding-bottom:8px}
+.view-toggle .tab-btn{flex:1;background:transparent;border:none;border-radius:8px;padding:8px 12px;
+  cursor:pointer;color:var(--dim);font:inherit;font-size:12px;transition:.2s}
+.view-toggle .tab-btn:hover{color:var(--fg);background:var(--raised)}
+.view-toggle .tab-btn.active{color:var(--accent);background:var(--accent-dim)}
+.view-toggle .tab-btn:focus{outline:none;border:1px solid var(--accent)}
+
+/* -- Harness Chat View -- */
+#harness-chat-view{flex:1;display:flex;flex-direction:column;overflow:hidden}
+.chat-container{flex:1;display:flex;flex-direction:column;overflow-y:auto;padding:16px;gap:12px}
+.chat-empty{color:var(--dim);text-align:center;margin-top:18vh;font-size:13px}
+
+/* Agent thinking pill */
+.agent-pill{display:inline-flex;align-items:center;gap:8px;padding:6px 12px;
+  background:var(--raised);border:1px solid var(--hair);border-radius:999px;
+  font-size:11px;color:var(--fg);margin-bottom:8px}
+.agent-pill.thinking{background:var(--accent-dim);border-color:var(--accent);color:var(--accent)}
+.agent-pill .spinner{width:12px;height:12px;border:2px solid currentColor;border-radius:50%;
+  border-right-color:transparent;animation:spin 1s linear infinite}
+.agent-pill .agent-name{font-weight:600;text-transform:capitalize}
+
+/* Chat messages */
+.chat-message{display:flex;flex-direction:column;gap:6px;padding:12px 16px;
+  background:var(--surface);border:1px solid var(--hair);border-radius:12px}
+.chat-message.agent{background:var(--accent-dim);border-color:var(--accent)}
+.chat-message-header{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--dim)}
+.chat-message-header .agent-badge{background:var(--accent);color:#0a1a2f;padding:2px 8px;border-radius:999px;font-size:10px}
+.chat-message-content{font-size:13px;line-height:1.6;white-space:pre-wrap;word-break:break-word}
+.chat-message-content code{background:var(--bg);padding:2px 6px;border-radius:4px;font-size:12px}
+.chat-message-content pre{background:var(--bg);border:1px solid var(--hair);border-radius:6px;padding:12px;overflow:auto}
+.chat-message-content pre code{background:transparent;padding:0}
+
+/* SVG Preview in chat */
+.chat-svg-preview{width:100%;max-width:400px;border:1px solid var(--hair);border-radius:6px;background:var(--bg);margin-top:8px}
+
+/* View switching */
+#harness-chat-view[hidden]{display:none}
+#history[hidden]{display:none}

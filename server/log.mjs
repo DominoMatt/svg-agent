@@ -67,11 +67,11 @@ export async function allEventsPresent(runId, eventTypes) {
 export async function getRunTrace(runId) {
   const events = await getEventsByRunId(runId);
   // Build DAG: step -> { actor, eventType, status, children }
+  // Use the LATEST event for each step to reflect current status
   const steps = {};
   for (const e of events) {
-    if (!steps[e.step]) {
-      steps[e.step] = { step: e.step, actor: e.actor, eventType: e.eventType, status: e.status, children: [] };
-    }
+    // Always update with latest event for this step
+    steps[e.step] = { step: e.step, actor: e.actor, eventType: e.eventType, status: e.status, children: [] };
     if (e.parentStep !== undefined && steps[e.parentStep]) {
       steps[e.parentStep].children.push(e.step);
     }

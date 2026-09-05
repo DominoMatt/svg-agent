@@ -135,6 +135,13 @@
 
     <ol id="history" class="history"></ol>
 
+    <!-- Harness Chat View (shown when harness tab active) -->
+    <div id="harness-chat-view" class="history" hidden>
+      <div id="harness-chat" class="chat-container">
+        <div class="chat-empty">No active run. Start a pipeline to see chat.</div>
+      </div>
+    </div>
+
     <form id="composer" novalidate>
       <textarea id="input" rows="1" placeholder="Ask anything…  (↵ sends, ⇧↵ newline)"></textarea>
       <button id="stop" class="fab stop-btn" type="button" aria-label="Stop" title="Stop generation">⏹</button>
